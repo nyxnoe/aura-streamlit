@@ -1,0 +1,6 @@
+streamlit
+openai
+supabase
+reportlab
+python-dotenv
+requests
