@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AURA - Intelligent Research Assistant</title>
+    <link rel="stylesheet" href="style.css">
+    <script>
+        // Check if user is logged in before showing the main interface
+        if (localStorage.getItem('aura_is_logged_in') !== 'true') {
+            window.location.href = 'login.html';
+        }
+    </script>
+</head>
+<body>
+    <!-- Header Section -->
+    <header>
+        <div class="header-content">
+            <div class="header-left">
+                <button id="sidebar-toggle" class="sidebar-toggle">☰</button>
+                <h1 class="main-header">✨ AURA</h1>
+            </div>
+            <div class="header-center">
+                <input type="text" class="header-search" id="header-search" placeholder="🔍 Search projects, papers, or ask questions..." />
+            </div>
+            <div class="header-right">
+                <span id="user-display" class="user-display" data-fullname="John Doe">J</span>
+                <button id="new-chat-btn" class="new-chat-btn">🆕 New Chat</button>
+                <button id="logout-btn" class="logout-btn">🚪 Logout</button>
+            </div>
+        </div>
+        <nav class="nav-menu">
+            <a href="#home" class="nav-link">Home</a>
+            <a href="#about" class="nav-link">About</a>
+            <a href="#features" class="nav-link">Features</a>
+            <a href="#contact" class="nav-link">Contact</a>
+        </nav>
+    </header>
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar-hidden">
+    <h2>📊 Project Progress</h2>
+
+    <!-- Progress Bar -->
+    <div class="progress-bar">
+        <div id="progress-fill" class="progress-fill"></div>
+    </div>
+
+    <!-- Progress List -->
+    <ul id="progress-list" class="progress-list">
+        <!-- Dynamically filled by JS -->
+    </ul>
+
+    <h3>🔬 Research Status</h3>
+    <div id="research-status"></div>
+
+    <h3>📄 Synopsis Generation</h3>
+    <div id="synopsis-section"></div>
+
+    <details>
+        <summary>🔧 Session Info</summary>
+        <div id="session-info"></div>
+    </details>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="sidebar-hidden">
+        <!-- Home Section -->
+        <section id="home">
+            <div class="hero-section">
+                <h1 class="main-header">✨ AURA</h1>
+                <p class="subtitle">Intelligent Research Assistant for B.Tech Projects</p>
+                <div class="hero-content">
+                    <p>Welcome to AURA, your AI-powered research companion designed specifically for engineering students. Transform your project ideas into comprehensive, professional synopses with intelligent automation and expert guidance.</p>
+                    <button class="cta-button" onclick="document.getElementById('chat-input').focus()">Start Your Project Journey</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- About Section -->
+        <section id="about">
+            <div class="section-content">
+                <h2>About AURA</h2>
+                <p>AURA (Advanced Universal Research Assistant) is an innovative AI-powered platform developed to revolutionize the way engineering students approach their B.Tech projects. Our intelligent system combines natural language processing, automated research capabilities, and academic writing expertise to help you create outstanding project documentation.</p>
+                <div class="about-features">
+                    <div class="feature-card">
+                        <h3>🤖 AI-Powered Conversations</h3>
+                        <p>Chat naturally about your project ideas and let AURA extract key information automatically.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>🔬 Auto-Research</h3>
+                        <p>Automatically research similar projects, papers, and methodologies as you chat.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>📄 Professional Documentation</h3>
+                        <p>Generate complete B.Tech project synopses following academic standards.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Chat Interface -->
+        <section id="chat-section">
+            <div id="chat-messages"></div>
+            <div id="chat-input-container">
+                <input type="text" id="chat-input" placeholder="💬 Tell me about your project idea or ask any questions..." />
+                <button id="send-button">Send</button>
+            </div>
+        </section>
+
+        <!-- Quick Actions -->
+        <section id="quick-actions">
+            <h3>🚀 Quick Actions</h3>
+            <div class="actions-grid">
+                <button id="find-projects">🔍 Find Similar Projects</button>
+                <button id="research-papers">📚 Research Papers</button>
+                <button id="professional-analysis">📊 Professional Analysis</button>
+                <button id="ai-suggestions">💡 Get AI Suggestions</button>
+            </div>
+        </section>
+
+        <!-- Help Section -->
+        <details id="help-section">
+            <summary>❓ How to Use AURA</summary>
+            <div>
+                <h4>🎯 Getting Started</h4>
+                <ol>
+                    <li><strong>Start naturally</strong> - Just tell me about your project idea in your own words</li>
+                    <li><strong>No forms needed</strong> - I'll extract information from our conversation</li>
+                    <li><strong>Ask anything</strong> - Get help with technical questions, implementation, or ideas</li>
+                </ol>
+                <h4>🔬 Auto-Research Feature</h4>
+                <ul>
+                    <li>Automatically triggers when enough information is gathered</li>
+                    <li>Generates introduction, literature review, and methodology</li>
+                    <li>Analyzes requirements and feasibility</li>
+                    <li>All research is integrated into your final synopsis</li>
+                </ul>
+                <h4>📄 Synopsis Generation</h4>
+                <ul>
+                    <li>Available after 3+ sections are filled</li>
+                    <li>Creates professional PDF following academic standards</li>
+                    <li>Includes all B.Tech project requirements</li>
+                    <li>Fully formatted and ready for submission</li>
+                </ul>
+                <h4>💡 Tips for Best Results</h4>
+                <ul>
+                    <li>Be specific about your project goals</li>
+                    <li>Mention technologies you plan to use</li>
+                    <li>Share any constraints or requirements</li>
+                    <li>Ask for suggestions when stuck</li>
+                </ul>
+                <h4>🚀 Quick Actions</h4>
+                <ul>
+                    <li><strong>Find Similar Projects</strong>: Discover related GitHub repositories</li>
+                    <li><strong>Research Papers</strong>: Find academic papers in your domain</li>
+                    <li><strong>Professional Analysis</strong>: Get expert-level project analysis</li>
+                    <li><strong>AI Suggestions</strong>: Receive personalized improvement ideas</li>
+                </ul>
+            </div>
+        </details>
+
+        <!-- Features Section -->
+        <section id="features">
+            <div class="section-content">
+                <h2>Key Features</h2>
+                <div class="features-grid">
+                    <div class="feature-item">
+                        <h3>🎯 Natural Conversation</h3>
+                        <p>Simply tell AURA about your project idea in plain English. No complex forms or templates required.</p>
+                    </div>
+                    <div class="feature-item">
+                        <h3>📚 Literature Review</h3>
+                        <p>Automatic research and integration of relevant academic papers and existing projects.</p>
+                    </div>
+                    <div class="feature-item">
+                        <h3>⚙️ Methodology Generation</h3>
+                        <p>Intelligent analysis of your project requirements and automatic methodology suggestions.</p>
+                    </div>
+                    <div class="feature-item">
+                        <h3>📊 Feasibility Analysis</h3>
+                        <p>Comprehensive assessment of project feasibility, resources, and implementation challenges.</p>
+                    </div>
+                    <div class="feature-item">
+                        <h3>🚀 Quick Actions</h3>
+                        <p>Instant access to project searches, paper recommendations, and professional analysis.</p>
+                    </div>
+                    <div class="feature-item">
+                        <h3>📥 PDF Generation</h3>
+                        <p>Professional PDF synopses ready for submission, formatted according to academic standards.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Contact Section -->
+        <section id="contact">
+            <div class="section-content">
+                <h2>Contact Us</h2>
+                <div class="contact-info">
+                    <div class="contact-card">
+                        <h3>📧 Email</h3>
+                        <p>nihalgood1234@gmail.com</p>
+                    </div>
+                    <div class="contact-card">
+                        <h3>🏛️ Institution</h3>
+                        <p>BRCM College of Engineering & Technology</p>
+                        <p>Bahal, Haryana, India</p>
+                    </div>
+                    <div class="contact-card">
+                        <h3>📞 Support</h3>
+                        <hlink>Phone: <hlink>+918250346972</hlink>
+                        <p>Email us at nihalgood1234@gmail.com for immediate assistance.</p>
+                        <p>Our dedicated support team is here to assist you.</p>
+                    </div>
+                    <div class="contact-card">
+                        <h3>💻 Development Team</h3>
+                        <p>Nihal Prasad</p>
+                        <p>Nitin Kumar Das</p>
+                        <p>Shiva Saini</p>
+                        <p>For technical support or feedback, please reach out to our development team.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <p>AURA v2.0 | Powered by Advanced AI | Made with ❤️ for Students</p>
+        <p>© 2024 BRCM College of Engineering & Technology</p>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>

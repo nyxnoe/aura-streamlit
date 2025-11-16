@@ -1,0 +1,30 @@
+/* 🌙 Clean sidebar + header look */
+[data-testid="stSidebar"] {
+    background-color: #f8f9fb;
+    border-right: 1px solid #e0e0e0;
+    box-shadow: 2px 0 6px rgba(0, 0, 0, 0.1);
+}
+
+[data-testid="stSidebarNav"] {
+    font-weight: 600;
+    color: #003366;
+}
+
+[data-testid="stHeader"] {
+    background-color: #004080 !important;
+    color: white !important;
+    text-align: center;
+    font-weight: bold;
+    padding: 10px;
+    font-size: 18px;
+}
+
+h1, h2, h3, h4 {
+    color: #00264d !important;
+    font-family: "Segoe UI", sans-serif !important;
+}
+
+.block-container {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}

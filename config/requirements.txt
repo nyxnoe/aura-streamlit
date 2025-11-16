@@ -1,0 +1,8 @@
+streamlit
+flask
+flask-cors
+openai
+reportlab
+supabase
+python-dotenv
+requests

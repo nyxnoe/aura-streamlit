@@ -2,24 +2,51 @@ import streamlit as st
 import time
 import uuid
 from datetime import datetime
-from services import (
-    handle_natural_conversation,
-    search_github_repos,
-    run_professional_analysis,
-    search_research_papers,
-    generate_comprehensive_synopsis,
-    load_memory,
-    save_memory,
-    get_ai_response,
-    auto_research_project
-)
+# --- OPTIMIZATION ---
+# Import from the new, faster services_v2.py file
+
+try:
+    from services_v2 import (
+        handle_natural_conversation,
+        search_github_repos,
+        run_professional_analysis,
+        search_research_papers,
+        generate_comprehensive_synopsis,
+        load_memory,
+        save_memory,
+        get_ai_response,
+        auto_research_project
+    )
+    _services_ok = True
+except Exception as _e:
+    print(f"Warning: Could not import services_v2: {_e}")
+    _services_ok = False
+    # define safe fallbacks so UI can start
+    def handle_natural_conversation(*args, **kwargs):
+        return {
+            "response": "Service unavailable: backend services failed to import. Check logs.",
+            "updated_memory": kwargs.get("current_memory", {}) if kwargs else {},
+            "updated_fields": [],
+            "missing_info": [],
+            "auto_research_triggered": False,
+            "research_results": {}
+        }
+    # Provide minimal fallbacks for other functions as needed...
+if not _services_ok:
+    import streamlit as st
+    st.error(
+        "⚠️ Some backend services failed to load. "
+        "Please check your environment variables and restart the app."
+    )
+    st.stop()  # Stop the app from proceeding further
+
 import json
 
 # ----------------------------
 # Streamlit Page Configuration
 # ----------------------------
 st.set_page_config(
-    page_title="AURA - Intelligent Research Assistant", 
+    page_title="AURA - Intelligent Research Assistant",
     layout="wide",
     initial_sidebar_state="expanded",
     menu_items={
@@ -144,10 +171,26 @@ st.markdown("""
     box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
 }
 
-/* Sidebar styling */
-.css-1d391kg {
-    background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
+/* --- Transparent Sidebar (Glassmorphism Style) --- */
+[data-testid="stSidebar"], .stSidebar, section[data-testid="stSidebar"] {
+    background: rgba(0, 0, 0, 0.25) !important;
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: none !important;
 }
+
+/* Sidebar content cards & buttons adjustments */
+[data-testid="stSidebar"] .block-container {
+    background: transparent !important;
+    color: #fff !important;
+}
+
+[data-testid="stSidebar"] * {
+    color: #f0f0f0 !important;
+}
+
+
 
 /* Quick action buttons */
 .quick-action-btn {
@@ -175,18 +218,6 @@ st.markdown("""
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     margin: 1rem 0;
 }
-
-/* Animated dots for loading */
-@keyframes blink {
-    0%, 60%, 100% { opacity: 1; }
-    30% { opacity: 0.3; }
-}
-
-.loading-dots span {
-    animation: blink 1.4s infinite;
-}
-.loading-dots span:nth-child(2) { animation-delay: 0.2s; }
-.loading-dots span:nth-child(3) { animation-delay: 0.4s; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -322,7 +353,7 @@ with st.sidebar:
                     )
                     with open(filename, "rb") as f:
                         pdf_bytes = f.read()
-                    
+                
                     st.success("✅ Synopsis generated successfully!")
         
         with col2:
@@ -368,42 +399,35 @@ if prompt := st.chat_input("💬 Tell me about your project idea or ask any ques
     with st.chat_message("assistant", avatar="🤖"):
         message_placeholder = st.empty()
         
-        # Animated thinking indicator
-        thinking_messages = [
-            "🤔 Understanding your message...",
-            "💭 Analyzing project details...",
-            "🔍 Extracting key information...",
-            "✨ Preparing response..."
-        ]
+        # --- OPTIMIZATION ---
+        # Removed the fake time.sleep() loop.
+        # We will wrap the actual, slow function call in a single spinner.
         
-        for i, thinking_msg in enumerate(thinking_messages):
-            message_placeholder.markdown(f'*{thinking_msg}*')
-            time.sleep(0.5)
-        
-        # Handle the conversation
-        try:
-            result = handle_natural_conversation(
-                prompt, 
-                st.session_state.conversation_history,
-                st.session_state.session_id,
-                st.session_state.synopsis_memory
-            )
-            
-            # Update session state
-            st.session_state.synopsis_memory = result["updated_memory"]
-            st.session_state.conversation_history.append({
-                "role": "assistant", 
-                "content": result["response"]
-            })
-            
-            # Build enhanced response
-            response_parts = [result["response"]]
-            
-            # Add auto-research notification if triggered
-            if result.get("auto_research_triggered"):
-                st.session_state.auto_research_done = True
-                research_alert = """
+        with st.spinner("🤔 AURA is thinking..."):
+            try:
+                # This is the real "laggy" function call (now optimized in services_v2.py)
+                result = handle_natural_conversation(
+                    prompt, 
+                    st.session_state.conversation_history,
+                    st.session_state.session_id,
+                    st.session_state.synopsis_memory
+                )
                 
+                # Update session state
+                st.session_state.synopsis_memory = result["updated_memory"]
+                st.session_state.conversation_history.append({
+                    "role": "assistant", 
+                    "content": result["response"]
+                })
+                
+                # Build enhanced response
+                response_parts = [result["response"]]
+                
+                # Add auto-research notification if triggered
+                if result.get("auto_research_triggered"):
+                    st.session_state.auto_research_done = True
+                    research_alert = """
+                    
 <div class="auto-research-alert">
 <h4>🔬 Auto-Research Complete!</h4>
 <p>I've automatically conducted comprehensive research for your project:</p>
@@ -416,46 +440,46 @@ if prompt := st.chat_input("💬 Tell me about your project idea or ask any ques
 </ul>
 <p><strong>All research has been integrated into your synopsis!</strong></p>
 </div>"""
-                response_parts.append(research_alert)
-            
-            # Add updated fields notification
-            if result.get("updated_fields"):
-                fields_str = ", ".join(result["updated_fields"])
-                response_parts.append(f"\n\n*📝 Updated: {fields_str}*")
-            
-            # Check if ready for synopsis
-            filled_fields = len([k for k, v in result["updated_memory"].items() 
-                               if v and len(str(v).strip()) > 10])
-            
-            if filled_fields >= 4 and not st.session_state.synopsis_memory.get("synopsis_offer_shown"):
-                synopsis_ready = """
+                    response_parts.append(research_alert)
                 
+                # Add updated fields notification
+                if result.get("updated_fields"):
+                    fields_str = ", ".join(result["updated_fields"])
+                    response_parts.append(f"\n\n*📝 Updated: {fields_str}*")
+                
+                # Check if ready for synopsis
+                filled_fields = len([k for k, v in result["updated_memory"].items() 
+                                    if v and len(str(v).strip()) > 10])
+                
+                if filled_fields >= 4 and not st.session_state.synopsis_memory.get("synopsis_offer_shown"):
+                    synopsis_ready = """
+                    
 <div class="synopsis-ready">
 <h4>🎉 Ready for Synopsis Generation!</h4>
 <p>Great progress! I have enough information to generate your comprehensive synopsis.</p>
 <p><strong>👉 Click "Generate Synopsis" in the sidebar</strong> or ask me to create it!</p>
 </div>"""
-                response_parts.append(synopsis_ready)
-                st.session_state.synopsis_memory["synopsis_offer_shown"] = True
-                save_memory(st.session_state.session_id, st.session_state.synopsis_memory)
-            
-            # Display complete response
-            full_response = "\n".join(response_parts)
-            message_placeholder.markdown(full_response, unsafe_allow_html=True)
-            
-            # Add to message history
-            st.session_state.messages.append({
-                "role": "assistant", 
-                "content": full_response
-            })
-            
-        except Exception as e:
-            error_msg = f"❌ An error occurred: {str(e)}\n\nPlease try again or rephrase your message."
-            message_placeholder.error(error_msg)
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": error_msg
-            })
+                    response_parts.append(synopsis_ready)
+                    st.session_state.synopsis_memory["synopsis_offer_shown"] = True
+                    save_memory(st.session_state.session_id, st.session_state.synopsis_memory)
+                
+                # Display complete response
+                full_response = "\n".join(response_parts)
+                message_placeholder.markdown(full_response, unsafe_allow_html=True)
+                
+                # Add to message history
+                st.session_state.messages.append({
+                    "role": "assistant", 
+                    "content": full_response
+                })
+                
+            except Exception as e:
+                error_msg = f"❌ An error occurred: {str(e)}\n\nPlease try again or rephrase your message."
+                message_placeholder.error(error_msg)
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": error_msg
+                })
 
 # ----------------------------
 # Quick Actions Section
@@ -469,6 +493,7 @@ with col1:
     if st.button("🔍 **Find Similar Projects**", use_container_width=True):
         if st.session_state.synopsis_memory.get("title"):
             with st.spinner("Searching GitHub..."):
+                # This now calls the cached function from services_v2.py
                 repos = search_github_repos(
                     st.session_state.synopsis_memory["title"], 
                     limit=5
@@ -483,6 +508,7 @@ with col2:
     if st.button("📚 **Research Papers**", use_container_width=True):
         if st.session_state.synopsis_memory.get("title"):
             with st.spinner("Finding research papers..."):
+                # This now calls the cached function from services_v2.py
                 papers = search_research_papers(
                     st.session_state.synopsis_memory["title"],
                     limit=5
@@ -501,6 +527,7 @@ with col3:
                     st.session_state.synopsis_memory["title"], 
                     limit=3
                 )
+                # This now calls the cached function from services_v2.py
                 analysis = run_professional_analysis(
                     st.session_state.synopsis_memory["title"],
                     repos
