@@ -55,7 +55,7 @@ class AppState {
 
 // API service class
 class APIService {
-    constructor(baseURL = 'https://aura-ai-powered-university-research-v0k3.onrender.com/') {
+    constructor(baseURL = 'https://aura-ai-powered-university-research-v0k3.onrender.com/api') {
         this.baseURL = baseURL;
     }
 
