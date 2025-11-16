@@ -6,15 +6,33 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import A4
 from supabase import create_client, Client
-from dotenv import load_dotenv
 import re
-import streamlit as st # Import Streamlit for caching
+
+# ✅ Load environment variables FIRST (before other imports that need them)
+import env_loader
+
+# ✅ Handle Streamlit import gracefully (it's not needed for backend-only deployment)
+try:
+    import streamlit as st
+    STREAMLIT_AVAILABLE = True
+except ImportError:
+    # Create a dummy st.cache_data decorator that does nothing
+    print("ℹ️ Streamlit not available (backend mode). Caching disabled.")
+    STREAMLIT_AVAILABLE = False
+    
+    class st:
+        """Dummy Streamlit class for backend-only mode"""
+        @staticmethod
+        def cache_data(ttl=None):
+            """No-op decorator when Streamlit is not available"""
+            def decorator(func):
+                return func
+            return decorator
 
 # Import functions from our optimized GitHub services file
 from github_services_v2 import search_github_repos as search_github_repos_cached
 
-# Load environment variables from .env file
-load_dotenv()
+# Global clients
 _supabase_client = None
 _openrouter_client = None
 _local_memory_cache = {}
@@ -32,16 +50,17 @@ def get_supabase_client():
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_KEY")
     if not url or not key:
-        print("Warning: SUPABASE_URL or SUPABASE_KEY not set. Supabase features will be disabled.")
+        print("ℹ️ Supabase not configured. Using local memory fallback.")
         _supabase_client = None
         return None
 
     try:
         from supabase import create_client
         _supabase_client = create_client(url, key)
+        print("✅ Supabase client initialized")
         return _supabase_client
     except Exception as e:
-        print(f"Warning: Failed to initialize Supabase client: {e}")
+        print(f"⚠️ Failed to initialize Supabase: {e}")
         _supabase_client = None
         return None
 
@@ -57,16 +76,17 @@ def get_openrouter_client():
 
     openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
     if not openrouter_api_key:
-        print("Warning: OPENROUTER_API_KEY not set. AI features will be mocked/limited.")
+        print("❌ OPENROUTER_API_KEY not set. AI features will be unavailable.")
         _openrouter_client = None
         return None
 
     try:
         from openai import OpenAI
         _openrouter_client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=openrouter_api_key)
+        print("✅ OpenRouter client initialized")
         return _openrouter_client
     except Exception as e:
-        print(f"Warning: Failed to initialize OpenRouter/OpenAI client: {e}")
+        print(f"❌ Failed to initialize OpenRouter: {e}")
         _openrouter_client = None
         return None
 
@@ -77,9 +97,7 @@ def get_ai_response(messages: list, model: str = "nvidia/nemotron-nano-12b-v2-vl
     """Generic function to get AI response from OpenRouter (safe, non-raising)."""
     client = get_openrouter_client()
     if client is None:
-        # Fallback: return a simple deterministic response instead of crashing
-        print("OpenRouter client not available — returning fallback response.")
-        return "AI service not configured. Please set OPENROUTER_API_KEY to enable AI features."
+        return "AI service not configured. Please set OPENROUTER_API_KEY environment variable."
     try:
         response = client.chat.completions.create(
             model=model,
@@ -88,8 +106,8 @@ def get_ai_response(messages: list, model: str = "nvidia/nemotron-nano-12b-v2-vl
         )
         return response.choices[0].message.content
     except Exception as e:
-        print(f"Error getting AI response: {e}")
-        return f"I encountered an error while calling AI: {e}"
+        print(f"❌ Error getting AI response: {e}")
+        return f"I encountered an error while calling AI: {str(e)}"
 
 def get_structured_ai_response(messages: list, format_instruction: str = "", model: str = "nvidia/nemotron-nano-12b-v2-vl:free") -> dict:
     """
@@ -129,17 +147,14 @@ def get_structured_ai_response(messages: list, format_instruction: str = "", mod
             raise
 
     except Exception as e:
-        print(f"⚠️ [Safe JSON Parse Error] {e}")
-        print("Raw response (truncated):", response[:800])
+        print(f"⚠️ [JSON Parse Error] {e}")
+        print("Raw response (truncated):", response[:500])
         return {"error": str(e), "raw_response": response}
 
 # ---------------------------------
 # AI-Driven Research Functions
 # ---------------------------------
 
-# --- OPTIMIZATION ---
-# Cache the entire auto-research process. If the project info hasn't changed,
-# we don't need to call the AI again.
 @st.cache_data(ttl=3600)
 def auto_research_project(project_info: dict) -> dict:
     """
@@ -185,7 +200,7 @@ def auto_research_project(project_info: dict) -> dict:
     research_results = get_structured_ai_response(messages, model="nvidia/nemotron-nano-12b-v2-vl:free")
 
     if research_results.get("error"):
-        print(f"❌ Error in auto-research: {research_results.get('raw_response')[:500]}")
+        print(f"❌ Error in auto-research: {research_results.get('raw_response', '')[:500]}")
         return {"error": research_results.get('raw_response')}
 
     # Format results
@@ -197,7 +212,7 @@ def auto_research_project(project_info: dict) -> dict:
         "feasibility_analysis": json.dumps(research_results.get("feasibility_analysis", {}), indent=2)
     }
 
-    print("✅ Auto-research JSON parsed successfully.")
+    print("✅ Auto-research completed successfully.")
     return formatted_results
 
 # ---------------------------------
@@ -208,9 +223,6 @@ def handle_natural_conversation(user_input: str, conversation_history: list, ses
     Main function to handle natural conversation.
     Consolidates extraction and response into one AI call.
     """
-    
-    # --- OPTIMIZATION ---
-    # Combine extraction and response generation into a single AI call.
     
     extraction_and_response_prompt = f"""
     You are AURA, an intelligent research assistant.
@@ -257,7 +269,7 @@ def handle_natural_conversation(user_input: str, conversation_history: list, ses
     
     if result.get("error"):
         return {
-            "response": f"An error occurred during AI processing: {result.get('raw_response')}",
+            "response": f"An error occurred during AI processing. Please try again.",
             "updated_memory": current_memory,
             "updated_fields": [],
             "missing_info": [],
@@ -288,7 +300,7 @@ def handle_natural_conversation(user_input: str, conversation_history: list, ses
             save_memory(session_id, updated_memory)
             auto_research_triggered = True
         else:
-            ai_response += f"\n\n(I tried to run auto-research, but hit an error: {research_results.get('error')})"
+            ai_response += f"\n\n(Auto-research encountered an issue, but you can continue.)"
     
     return {
         "response": ai_response,
@@ -307,15 +319,12 @@ def search_github_repos(query: str, limit: int = 10) -> list:
     Pass-through function to our cached GitHub service.
     This exists so app_v2.py only needs to import from services_v2.py
     """
-    # This now calls the imported, cached function
     return search_github_repos_cached(query, limit)
 
 @st.cache_data(ttl=3600)
 def search_research_papers(query: str, limit: int = 5) -> list:
     """Enhanced research paper search (Mock)"""
-    # This is a mock function. In a real app, this would call an API
-    # like Semantic Scholar or ArXiv.
-    print(f"Mock searching for papers on: {query}")
+    print(f"📚 Mock searching for papers on: {query}")
     papers = []
     for i in range(min(limit, 3)):
         papers.append(f"📄 **Research Paper {i+1}**: Advanced {query} using Machine Learning Techniques (2024)\n    🎯 Highly relevant to your project approach")
@@ -327,7 +336,7 @@ def run_professional_analysis(idea: str, repos: list) -> str:
     analysis_prompt = f"""
     Conduct a professional analysis of this project idea: {idea}
     
-    Available similar repositories: {repos}
+    Available similar repositories: {repos[:3]}
     
     Provide analysis covering:
     1. Market Potential and Innovation Level
@@ -351,8 +360,6 @@ def run_professional_analysis(idea: str, repos: list) -> str:
 def load_memory(session_id: str) -> dict:
     client = get_supabase_client()
     if client is None:
-        # Use local cache fallback
-        print("Supabase not configured — using local memory fallback.")
         return _local_memory_cache.get(session_id, {})
     try:
         response = client.table("user_sessions").select("research_data").eq("session_id", session_id).execute()
@@ -360,16 +367,12 @@ def load_memory(session_id: str) -> dict:
             return response.data[0]["research_data"] or {}
         return {}
     except Exception as e:
-        print(f"Error loading memory from Supabase: {e}")
+        print(f"⚠️ Error loading memory from Supabase: {e}")
         return _local_memory_cache.get(session_id, {})
 
-# --- DATABASE FIX ---
-# Reverted to the original, safer select-then-update/insert logic
-# This avoids the "ON CONFLICT" error with Supabase.
 def save_memory(session_id: str, memory: dict, idea: str = None):
     client = get_supabase_client()
     if client is None:
-        print("Supabase not configured — saving to local memory fallback.")
         _local_memory_cache[session_id] = memory
         return
     try:
@@ -386,7 +389,7 @@ def save_memory(session_id: str, memory: dict, idea: str = None):
             data_to_save["created_at"] = datetime.now().isoformat()
             client.table("user_sessions").insert(data_to_save).execute()
     except Exception as e:
-        print(f"Error saving memory: {e}")
+        print(f"⚠️ Error saving memory: {e}")
 
 
 # ---------------------------------
@@ -398,20 +401,18 @@ def generate_comprehensive_synopsis(session_id: str, idea: str = None, repos: li
     memory = load_memory(session_id)
     research_results = memory.get("research_results", {})
 
-    # ✅ Always resolve from project root (one level above /backend/)
-    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-
-    # ✅ Create outputs directory if it doesn't exist
-    output_dir = os.path.join(project_root, "outputs")
+    # ✅ Create outputs directory in backend folder
+    backend_dir = os.path.abspath(os.path.dirname(__file__))
+    output_dir = os.path.join(backend_dir, "outputs")
     os.makedirs(output_dir, exist_ok=True)
 
-    # ✅ Save the file into /outputs/
+    # ✅ Generate filename
     filename = f"synopsis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
     output_path = os.path.join(output_dir, filename)
 
     print(f"📂 Saving synopsis to: {output_path}")
 
-    # ✅ Use absolute path for PDF
+    # ✅ Create PDF
     doc = SimpleDocTemplate(output_path, pagesize=A4)
     styles = getSampleStyleSheet()
     story = []
@@ -526,7 +527,6 @@ def generate_comprehensive_synopsis(session_id: str, idea: str = None, repos: li
         story.append(Paragraph(clean_text(str(feas_raw)), styles["Normal"]))
     story.append(PageBreak())
 
-
     # 8. IMPLEMENTATION PLAN
     story.append(Paragraph("<b>8. IMPLEMENTATION PLAN</b>", styles["Heading2"]))
     impl_plan = memory.get("process_description", "Detailed implementation plan with timeline and milestones.")
@@ -546,6 +546,7 @@ def generate_comprehensive_synopsis(session_id: str, idea: str = None, repos: li
         references_content = "\n".join(references_content)
     story.append(Paragraph(clean_text(references_content), styles["Normal"]))
 
-    # ✅ Build and return correct path
+    # ✅ Build PDF and return just the filename
     doc.build(story)
-    return output_path
+    print(f"✅ Synopsis generated: {filename}")
+    return filename
