@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
+from flask import send_from_directory
 import os
 import json
 from datetime import datetime
@@ -18,7 +19,11 @@ from services_v2 import (
     get_ai_response
 )
 
-app = Flask(__name__)
+# Path to the frontend folder (one level up from this 'backend' folder)
+frontend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend'))
+
+# Create Flask app, telling it where to find static files
+app = Flask(__name__, static_folder=frontend_dir)
 
 # ✅ Configure CORS properly
 CORS(app, resources={
@@ -31,22 +36,13 @@ CORS(app, resources={
 })
 
 @app.route('/', methods=['GET'])
-def home():
-    """Health check endpoint"""
-    return jsonify({
-        "status": "online",
-        "service": "AURA Backend API",
-        "version": "2.0",
-        "endpoints": [
-            "POST /api/conversation",
-            "GET /api/github-search",
-            "GET /api/research-papers",
-            "POST /api/professional-analysis",
-            "POST /api/generate-synopsis",
-            "GET /api/download/<filename>",
-            "POST /api/ai-suggestions"
-        ]
-    })
+def serve_login():
+    """Serves the login.html page as the homepage"""
+    return send_from_directory(frontend_dir, 'login.html')
+@app.route('/<path:filename>')
+def serve_frontend_files(filename):
+    """Serves all other static files from the frontend folder"""
+    return send_from_directory(frontend_dir, filename)
 
 @app.route('/api/health', methods=['GET'])
 def health():
