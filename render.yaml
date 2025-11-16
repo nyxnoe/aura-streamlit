@@ -1,4 +1,5 @@
 services:
+  #======= Backend API Service =======
   - type: web
     name: aura-backend-api
     env: python
@@ -18,3 +19,12 @@ services:
         sync: false
       - key: FLASK_ENV
         value: production
+
+  #======= Frontend Static Site =======
+  - type: static
+    name: aura-frontend-app # <-- You can make this name more unique
+    region: oregon
+    plan: free
+    branch: main
+    rootDir: frontend
+    # No build command or publish directory is needed here
