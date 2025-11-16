@@ -3,16 +3,28 @@ import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import json
-import streamlit as st # Import Streamlit for caching
+import os
+
+# ✅ Handle Streamlit import gracefully (not required for backend)
+try:
+    import streamlit as st
+    STREAMLIT_AVAILABLE = True
+except ImportError:
+    print("ℹ️ Streamlit not available. GitHub caching disabled.")
+    STREAMLIT_AVAILABLE = False
+    
+    # Create dummy st.cache_data decorator
+    class st:
+        """Dummy Streamlit class for backend-only mode"""
+        @staticmethod
+        def cache_data(ttl=None):
+            """No-op decorator when Streamlit is not available"""
+            def decorator(func):
+                return func
+            return decorator
 
 GITHUB_API_URL = "https://api.github.com/search/repositories"
 GITHUB_REPO_API_URL = "https://api.github.com/repos"
-
-# --- OPTIMIZATION ---
-# We will cache the results of API calls to avoid re-fetching data.
-# `ttl` (time-to-live) is set to 3600 seconds (1 hour).
-# This means the app will only re-fetch data from GitHub for the same
-# query if it's been more than an hour.
 
 class GitHubAnalyzer:
     """Professional GitHub repository analyzer for comprehensive research"""
@@ -27,9 +39,7 @@ class GitHubAnalyzer:
         """Implement rate limiting to avoid API limits"""
         current_time = datetime.now()
         if (current_time - self.last_request_time).total_seconds() < 1:
-            # Removed time.sleep(1) as it blocks the app.
-            # Caching will reduce the number of calls, making this less necessary.
-            pass
+            pass  # Caching reduces need for sleep
         self.last_request_time = current_time
         self.request_count += 1
     
@@ -38,7 +48,6 @@ class GitHubAnalyzer:
         if not text:
             return "No description available."
         
-        # Clean up the text
         text = text.strip().replace('\n', ' ').replace('\r', '')
         words = text.split()
         
@@ -47,18 +56,14 @@ class GitHubAnalyzer:
             return f"{truncated}..."
         return text
     
-    # --- OPTIMIZATION ---
-    # Cache this function. It will be called for each of the top 5 repos.
-    # Caching this makes the N+1 problem much less painful.
-    @st.cache_data(ttl=3600)
     def get_repository_details(self, repo_full_name: str) -> Dict:
         """Get detailed information about a specific repository"""
-        print(f"GitHub API: Fetching details for {repo_full_name}") # For debugging cache
+        print(f"📦 Fetching details for {repo_full_name}")
         self._rate_limit_check()
         
         try:
             url = f"{GITHUB_REPO_API_URL}/{repo_full_name}"
-            response = requests.get(url, headers=self.headers)
+            response = requests.get(url, headers=self.headers, timeout=10)
             response.raise_for_status()
             
             repo_data = response.json()
@@ -69,7 +74,7 @@ class GitHubAnalyzer:
             # Fetch languages
             languages = {}
             if languages_url:
-                lang_response = requests.get(languages_url, headers=self.headers)
+                lang_response = requests.get(languages_url, headers=self.headers, timeout=10)
                 if lang_response.status_code == 200:
                     languages = lang_response.json()
             
@@ -94,7 +99,7 @@ class GitHubAnalyzer:
             }
             
         except requests.exceptions.RequestException as e:
-            print(f"Error fetching repository details for {repo_full_name}: {e}")
+            print(f"⚠️ Error fetching repository details for {repo_full_name}: {e}")
             return {}
     
     def analyze_repository_quality(self, repo_details: Dict) -> Dict:
@@ -165,9 +170,6 @@ class GitHubAnalyzer:
             'factors': factors
         }
 
-# --- OPTIMIZATION ---
-# This is the main function called by Streamlit. Caching it provides
-# the biggest performance boost.
 @st.cache_data(ttl=3600)
 def search_github_repos(query: str, limit: int = 10, sort_by: str = 'stars') -> List[str]:
     """
@@ -181,7 +183,8 @@ def search_github_repos(query: str, limit: int = 10, sort_by: str = 'stars') -> 
     Returns:
         list: Formatted repository information with analysis
     """
-    print(f"GitHub API: Searching for {query}") # For debugging cache
+    print(f"🔍 Searching GitHub for: {query}")
+    
     if not query:
         return []
 
@@ -189,21 +192,20 @@ def search_github_repos(query: str, limit: int = 10, sort_by: str = 'stars') -> 
     
     # Enhanced search parameters
     params = {
-        'q': f"{query} stars:>10",  # Filter for repositories with some community validation
+        'q': f"{query} stars:>10",
         'sort': sort_by,
         'order': 'desc',
-        'per_page': min(limit, 30)  # GitHub API limit
+        'per_page': min(limit, 30)
     }
     
     try:
         analyzer._rate_limit_check()
-        token = os.environ.get("GITHUB_TOKEN")  # optional
+        token = os.environ.get("GITHUB_TOKEN")
         headers = {}
         if token:
             headers["Authorization"] = f"token {token}"
 
         response = requests.get(GITHUB_API_URL, params=params, headers=headers, timeout=10)
-
         response.raise_for_status()
         data = response.json()
         
@@ -212,15 +214,11 @@ def search_github_repos(query: str, limit: int = 10, sort_by: str = 'stars') -> 
         
         for i, item in enumerate(items, 1):
             # Get detailed analysis for top repositories
-            if i <= 5:  # Detailed analysis for top 5 results
-                # This call will now hit the cache if seen before
+            if i <= 5:
                 detailed_info = analyzer.get_repository_details(item['full_name'])
                 quality_analysis = analyzer.analyze_repository_quality(detailed_info)
-                
-                # Enhanced formatting with quality metrics
                 repo_info = format_repository_with_analysis(item, detailed_info, quality_analysis, i)
             else:
-                # Basic formatting for remaining repositories
                 repo_info = format_repository_basic(item, i)
             
             formatted_repos.append(repo_info)
@@ -228,8 +226,7 @@ def search_github_repos(query: str, limit: int = 10, sort_by: str = 'stars') -> 
         return formatted_repos
 
     except requests.exceptions.RequestException as e:
-        print(f"Error calling GitHub API: {e}")
-        # Return a user-friendly error message
+        print(f"⚠️ GitHub API Error: {e}")
         return [f"⚠️ **GitHub API Error**: Could not fetch repositories. Please try again later."]
 
 def format_repository_with_analysis(item: Dict, details: Dict, quality: Dict, rank: int) -> str:
@@ -242,7 +239,8 @@ def format_repository_with_analysis(item: Dict, details: Dict, quality: Dict, ra
     language = item.get('language', 'Not specified')
     
     description = details.get('description') or item.get('description', '')
-    truncated_desc = GitHubAnalyzer()._truncate_description(description)
+    analyzer = GitHubAnalyzer()
+    truncated_desc = analyzer._truncate_description(description)
     
     # Quality indicators
     quality_emoji = "🌟" if quality['level'] == "Excellent" else \
@@ -305,7 +303,8 @@ def format_repository_basic(item: Dict, rank: int) -> str:
     language = item.get('language', 'Not specified')
     description = item.get('description', 'No description available.')
     
-    truncated_desc = GitHubAnalyzer()._truncate_description(description, 15)
+    analyzer = GitHubAnalyzer()
+    truncated_desc = analyzer._truncate_description(description, 15)
     
     return f"""**{rank}. 📦 [{name}]({url})**
     ⭐ {stars:,} stars | 💻 {language}
@@ -319,16 +318,11 @@ def analyze_repository_trends(repositories: List[str]) -> Dict:
     if not repositories:
         return {}
     
-    # Extract data from formatted repositories
     total_repos = len(repositories)
-    languages = {}
     total_stars = 0
-    license_types = {}
     activity_levels = {'Active': 0, 'Recent': 0, 'Stable': 0}
     
     for repo in repositories:
-        # Simple parsing of formatted strings (in a real implementation, 
-        # you'd store structured data)
         if '⭐' in repo:
             try:
                 stars_part = repo.split('⭐')[1].split('stars')[0].strip()
@@ -337,7 +331,6 @@ def analyze_repository_trends(repositories: List[str]) -> Dict:
             except (ValueError, IndexError):
                 pass
         
-        # Activity parsing
         if '🟢 Active' in repo:
             activity_levels['Active'] += 1
         elif '🟡 Recent' in repo:
@@ -354,142 +347,3 @@ def analyze_repository_trends(repositories: List[str]) -> Dict:
         'activity_distribution': activity_levels,
         'dominant_activity': max(activity_levels.items(), key=lambda x: x[1])[0] if activity_levels else 'Unknown'
     }
-
-def generate_research_summary(query: str, repositories: List[str]) -> str:
-    """Generate a comprehensive research summary"""
-    
-    if not repositories:
-        return "No repositories found for analysis."
-    
-    trends = analyze_repository_trends(repositories)
-    
-    summary = f"""## 📊 **Repository Research Summary**
-
-**Search Query:** `{query}`
-
-### 📈 **Quantitative Analysis**
-- **Repositories Analyzed:** {trends.get('total_repositories', 0)}
-- **Total Community Stars:** {trends.get('total_stars', 0):,}
-- **Average Stars per Repository:** {trends.get('average_stars', 0):,}
-- **Dominant Activity Level:** {trends.get('dominant_activity', 'Unknown')}
-
-### 🔍 **Key Insights**
-
-**Community Validation:**
-The search results indicate a {'strong' if trends.get('average_stars', 0) > 500 else 'moderate' if trends.get('average_stars', 0) > 100 else 'emerging'} community interest in this domain.
-
-**Development Activity:**
-Most repositories show {'active development' if trends.get('dominant_activity') == 'Active' else 'stable maintenance' if trends.get('dominant_activity') == 'Stable' else 'recent activity'}, suggesting {'ongoing innovation' if trends.get('dominant_activity') == 'Active' else 'mature solutions' if trends.get('dominant_activity') == 'Stable' else 'evolving ecosystem'}.
-
-**Implementation Readiness:**
-The variety and quality of available repositories provide {'excellent' if trends.get('total_repositories', 0) >= 10 else 'good' if trends.get('total_repositories', 0) >= 5 else 'basic'} foundation for learning and reference.
-
-### 🎯 **Research Recommendations**
-
-1. **Primary References:** Focus on top 3-5 repositories with highest quality scores
-2. **Technology Patterns:** Study common architectural approaches across projects
-3. **Community Practices:** Review documentation and coding standards
-4. **Innovation Opportunities:** Identify gaps in existing solutions
-
-### 📚 **Academic Value**
-This repository collection provides substantial academic reference material with proven implementation examples and active community discussion."""
-    
-    return summary
-
-def search_advanced_repos(query: str, filters: Dict = None) -> List[str]:
-    """Advanced repository search with custom filters"""
-    
-    default_filters = {
-        'language': None,
-        'min_stars': 10,
-        'max_age_days': None,
-        'has_license': True,
-        'exclude_forks': True
-    }
-    
-    if filters:
-        default_filters.update(filters)
-    
-    # Build advanced query
-    search_terms = [query]
-    
-    if default_filters['language']:
-        search_terms.append(f"language:{default_filters['language']}")
-    
-    if default_filters['min_stars']:
-        search_terms.append(f"stars:>={default_filters['min_stars']}")
-    
-    if default_filters['exclude_forks']:
-        search_terms.append("fork:false")
-    
-    if default_filters['max_age_days']:
-        cutoff_date = (datetime.now() - timedelta(days=default_filters['max_age_days'])).strftime('%Y-%m-%d')
-        search_terms.append(f"pushed:>={cutoff_date}")
-    
-    advanced_query = ' '.join(search_terms)
-    
-    # This will now use the cached version of search_github_repos
-    return search_github_repos(advanced_query, limit=15)
-
-def get_repository_recommendations(idea: str, current_repos: List[str]) -> str:
-    """Get personalized repository recommendations based on project idea"""
-    
-    # Extract keywords from idea for targeted search
-    keywords = extract_idea_keywords(idea)
-    
-    recommendations = []
-    
-    # Search for complementary repositories
-    for keyword in keywords[:3]:  # Top 3 keywords
-        # This will also use the cache
-        specific_repos = search_github_repos(f"{keyword} tutorial example", limit=3)
-        recommendations.extend(specific_repos[:2])  # Top 2 from each search
-    
-    if not recommendations:
-        return "No specific recommendations available at this time."
-    
-    return f"""## 🎯 **Personalized Repository Recommendations**
-
-Based on your project idea: *"{idea}"*
-
-### 📚 **Complementary Learning Resources**
-
-{chr(10).join(recommendations)}
-
-### 💡 **How to Use These Resources**
-1. **Study Implementation Patterns** - Analyze code structure and design decisions
-2. **Understand Best Practices** - Review documentation and coding standards  
-3. **Identify Integration Opportunities** - Look for compatible libraries and frameworks
-4. **Learn from Community** - Study issues, pull requests, and discussions
-
-### 🔗 **Integration Strategy**
-Consider how concepts from these repositories can be adapted and integrated into your unique solution."""
-
-def extract_idea_keywords(idea: str) -> List[str]:
-    """Extract relevant keywords from project idea for targeted search"""
-    
-    # Common technical keywords and their variations
-    keyword_map = {
-        'web': ['website', 'web app', 'frontend', 'backend'],
-        'mobile': ['app', 'android', 'ios', 'mobile'],
-        'ai': ['artificial intelligence', 'machine learning', 'neural'],
-        'data': ['database', 'analytics', 'visualization'],
-        'game': ['gaming', 'game development', 'unity'],
-        'automation': ['bot', 'script', 'automated'],
-        'api': ['rest', 'graphql', 'microservice'],
-        'security': ['authentication', 'encryption', 'secure']
-    }
-    
-    idea_lower = idea.lower()
-    found_keywords = []
-    
-    for base_keyword, variations in keyword_map.items():
-        if base_keyword in idea_lower or any(var in idea_lower for var in variations):
-            found_keywords.append(base_keyword)
-    
-    # Add specific words from the idea that might be technical terms
-    words = idea_lower.split()
-    technical_words = [word for word in words if len(word) > 4 and word.isalpha()]
-    found_keywords.extend(technical_words[:3])
-    
-    return list(dict.fromkeys(found_keywords))  # Remove duplicates while preserving order
