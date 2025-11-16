@@ -499,7 +499,7 @@ class UIManager {
             if (result && result.filename) {
                 // Create download link
                 const downloadLink = document.createElement('a');
-                downloadLink.href = `http://localhost:5000/api/download/${result.filename}`;
+                downloadLink.href = `${this.apiService.baseURL}/download/${result.filename}`;
                 downloadLink.download = result.filename;
                 downloadLink.textContent = '📥 Download PDF';
                 downloadLink.style.cssText = `
