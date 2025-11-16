@@ -25,27 +25,43 @@ class AppState {
         window.location.href = 'login.html';
     }
 
-    loadMessages() {
-        const messages = localStorage.getItem('aura_messages');
-        return messages ? JSON.parse(messages) : [];
+    // --- IMPROVED LOADER FUNCTIONS (Self-Healing) ---
+
+    _safeLoad(key, defaultValue) {
+        const data = localStorage.getItem(key);
+        try {
+            // Check for common bad values
+            if (!data || data === "undefined" || data === "null") {
+                return defaultValue;
+            }
+            return JSON.parse(data);
+        } catch (e) {
+            console.warn(`⚠️ Corrupted data found for ${key}. Resetting to default.`);
+            // If parsing fails, return default instead of crashing
+            return defaultValue;
+        }
     }
+
+    loadMessages() {
+        return this._safeLoad('aura_messages', []);
+    }
+
+    loadConversationHistory() {
+        return this._safeLoad('aura_conversation_history', []);
+    }
+
+    loadSynopsisMemory() {
+        return this._safeLoad('aura_synopsis_memory', {});
+    }
+
+    // --- SAVE FUNCTIONS (Unchanged) ---
 
     saveMessages() {
         localStorage.setItem('aura_messages', JSON.stringify(this.messages));
     }
 
-    loadConversationHistory() {
-        const history = localStorage.getItem('aura_conversation_history');
-        return history ? JSON.parse(history) : [];
-    }
-
     saveConversationHistory() {
         localStorage.setItem('aura_conversation_history', JSON.stringify(this.conversationHistory));
-    }
-
-    loadSynopsisMemory() {
-        const memory = localStorage.getItem('aura_synopsis_memory');
-        return memory ? JSON.parse(memory) : {};
     }
 
     saveSynopsisMemory() {

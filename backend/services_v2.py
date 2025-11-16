@@ -68,34 +68,23 @@ def get_supabase_client():
 # ---------------------------------
 # OpenRouter Client (using OpenAI SDK)
 # ---------------------------------
-# ---------------------------------
-# OpenRouter Client (using OpenAI SDK)
-# ---------------------------------
 def get_openrouter_client():
     """Lazy-create OpenRouter/OpenAI client. Return None if API key missing."""
     global _openrouter_client
-    
+    if openrouter_api_key:
+        print(f"🔑 DEBUG: API Key loaded! Length: {len(openrouter_api_key)}")
+        print(f"🔑 DEBUG: Key starts with: {openrouter_api_key[:10]}...")
+    else:
+        print("❌ DEBUG: OPENROUTER_API_KEY is None or Empty!")
     if _openrouter_client is not None:
         return _openrouter_client
 
-    # 1. CREATE the variable first (This was likely missing or out of order)
     openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
-
-    # 2. NOW debug it
-    if openrouter_api_key:
-        print(f"🔑 DEBUG: API Key loaded! Length: {len(openrouter_api_key)}")
-        # Print first 5 chars only for safety
-        print(f"🔑 DEBUG: Key starts with: {openrouter_api_key[:5]}...")
-    else:
-        print("❌ DEBUG: OPENROUTER_API_KEY is None or Empty!")
-
-    # 3. VALIDATE it
     if not openrouter_api_key:
         print("❌ OPENROUTER_API_KEY not set. AI features will be unavailable.")
         _openrouter_client = None
         return None
 
-    # 4. USE it
     try:
         from openai import OpenAI
         _openrouter_client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=openrouter_api_key)
@@ -105,6 +94,7 @@ def get_openrouter_client():
         print(f"❌ Failed to initialize OpenRouter: {e}")
         _openrouter_client = None
         return None
+
 # ---------------------------------
 # Enhanced AI Response Function
 # ----------------------------------
