@@ -71,6 +71,11 @@ def get_supabase_client():
 def get_openrouter_client():
     """Lazy-create OpenRouter/OpenAI client. Return None if API key missing."""
     global _openrouter_client
+    if openrouter_api_key:
+        print(f"🔑 DEBUG: API Key loaded! Length: {len(openrouter_api_key)}")
+        print(f"🔑 DEBUG: Key starts with: {openrouter_api_key[:10]}...")
+    else:
+        print("❌ DEBUG: OPENROUTER_API_KEY is None or Empty!")
     if _openrouter_client is not None:
         return _openrouter_client
 

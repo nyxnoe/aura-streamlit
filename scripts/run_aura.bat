@@ -15,7 +15,7 @@ if errorlevel 1 (
 )
 
 REM Check if required files exist
-if not exist "backend\api_server.py" (
+if not exist "C:\Users\nihal\OneDrive\Desktop\aura-streamlit\backend\api_server.py" (
     echo ERROR: backend\api_server.py not found.
     echo Please make sure you're in the correct directory.
     echo.
@@ -23,7 +23,7 @@ if not exist "backend\api_server.py" (
     exit /b 1
 )
 
-if not exist "frontend\index.html" (
+if not exist "C:\Users\nihal\OneDrive\Desktop\aura-streamlit\frontend\index.html" (
     echo ERROR: frontend\index.html not found.
     echo Please make sure you're in the correct directory.
     echo.
@@ -41,7 +41,7 @@ if errorlevel 1 (
 )
 
 REM Check for .env file
-if not exist "config\.env" (
+if not exist "C:\Users\nihal\OneDrive\Desktop\aura-streamlit\config\.env" (
     echo Creating template .env file...
     echo OPENROUTER_API_KEY=your_openrouter_api_key_here > config\.env
     echo SUPABASE_URL=your_supabase_url_here >> config\.env
