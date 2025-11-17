@@ -928,3 +928,108 @@ details div {
     animation: progressGradient 3s ease infinite;
     transition: width 0.3s ease;
 }
+/* --- Sidebar Cards (Streamlit Style) --- */
+
+/* The Card Container */
+.sidebar-card {
+    background: rgba(255, 255, 255, 0.05); /* Dark glass effect */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    padding: 10px;
+    color: #eee;
+    transition: all 0.2s;
+}
+
+/* Completed Items */
+.sidebar-card.completed {
+    border-left: 4px solid #00cc96; /* Streamlit Green */
+    background: rgba(0, 204, 150, 0.05);
+}
+
+.sidebar-card.completed summary {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    list-style: none; /* Hide default arrow */
+    outline: none;
+}
+
+/* Pending Items */
+.sidebar-card.pending {
+    border-left: 4px solid #ffbd45; /* Orange/Yellow */
+    opacity: 0.7;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Custom Expand Arrow */
+.expand-hint {
+    margin-left: auto;
+    font-size: 0.8em;
+    opacity: 0.5;
+    transition: transform 0.2s;
+}
+
+details[open] .expand-hint {
+    transform: rotate(180deg);
+}
+
+/* Content inside the card */
+.card-content {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.85rem;
+    color: #ccc;
+    max-height: 200px;
+    overflow-y: auto;
+    line-height: 1.4;
+}
+
+/* Progress Bar Track */
+.progress-header {
+    font-size: 0.9rem;
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #00cc96;
+}
+
+.progress-track {
+    background: rgba(255, 255, 255, 0.1);
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    background: #00cc96; /* Streamlit Green */
+    height: 100%;
+    transition: width 0.5s ease;
+}
+
+/* Research Status Cards */
+.sidebar-card.research-done {
+    background: linear-gradient(45deg, rgba(0,204,150,0.1), rgba(0,204,150,0.2));
+    border: 1px solid #00cc96;
+}
+
+.sidebar-card.research-pending {
+    border-left: 4px solid #ffbd45;
+    opacity: 0.7;
+}
+
+/* Sidebar Button */
+.sidebar-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 10px;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 10px;
+}

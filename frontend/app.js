@@ -1,4 +1,6 @@
-// State management using localStorage
+// ==========================================
+// 1. STATE MANAGEMENT (With Self-Healing)
+// ==========================================
 class AppState {
     constructor() {
         this.sessionId = this.getSessionId();
@@ -25,53 +27,35 @@ class AppState {
         window.location.href = 'login.html';
     }
 
-    // --- IMPROVED LOADER FUNCTIONS (Self-Healing) ---
-
+    // --- Safe Loaders (Prevents "undefined" crashes) ---
     _safeLoad(key, defaultValue) {
         const data = localStorage.getItem(key);
         try {
-            // Check for common bad values
             if (!data || data === "undefined" || data === "null") {
                 return defaultValue;
             }
             return JSON.parse(data);
         } catch (e) {
-            console.warn(`⚠️ Corrupted data found for ${key}. Resetting to default.`);
-            // If parsing fails, return default instead of crashing
+            console.warn(`⚠️ Corrupted data for ${key}. Resetting.`);
             return defaultValue;
         }
     }
 
-    loadMessages() {
-        return this._safeLoad('aura_messages', []);
-    }
+    loadMessages() { return this._safeLoad('aura_messages', []); }
+    loadConversationHistory() { return this._safeLoad('aura_conversation_history', []); }
+    loadSynopsisMemory() { return this._safeLoad('aura_synopsis_memory', {}); }
 
-    loadConversationHistory() {
-        return this._safeLoad('aura_conversation_history', []);
-    }
-
-    loadSynopsisMemory() {
-        return this._safeLoad('aura_synopsis_memory', {});
-    }
-
-    // --- SAVE FUNCTIONS (Unchanged) ---
-
-    saveMessages() {
-        localStorage.setItem('aura_messages', JSON.stringify(this.messages));
-    }
-
-    saveConversationHistory() {
-        localStorage.setItem('aura_conversation_history', JSON.stringify(this.conversationHistory));
-    }
-
-    saveSynopsisMemory() {
-        localStorage.setItem('aura_synopsis_memory', JSON.stringify(this.synopsisMemory));
-    }
+    // --- Savers ---
+    saveMessages() { localStorage.setItem('aura_messages', JSON.stringify(this.messages)); }
+    saveConversationHistory() { localStorage.setItem('aura_conversation_history', JSON.stringify(this.conversationHistory)); }
+    saveSynopsisMemory() { localStorage.setItem('aura_synopsis_memory', JSON.stringify(this.synopsisMemory)); }
 }
 
-// API service class
+// ==========================================
+// 2. API SERVICE (Connected to Relative Path)
+// ==========================================
 class APIService {
-    constructor(baseURL = '/api') {
+    constructor(baseURL = '/api') { // ✅ Fixes CORS
         this.baseURL = baseURL;
     }
 
@@ -79,9 +63,7 @@ class APIService {
         try {
             const response = await fetch(`${this.baseURL}/conversation`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     prompt,
                     conversation_history: conversationHistory,
@@ -107,74 +89,55 @@ class APIService {
         try {
             const response = await fetch(`${this.baseURL}/github-search?q=${encodeURIComponent(query)}&limit=${limit}`);
             return await response.json();
-        } catch (error) {
-            console.error('GitHub Search Error:', error);
-            return [];
-        }
+        } catch (error) { return []; }
     }
 
     async searchResearchPapers(query, limit = 5) {
         try {
             const response = await fetch(`${this.baseURL}/research-papers?q=${encodeURIComponent(query)}&limit=${limit}`);
             return await response.json();
-        } catch (error) {
-            console.error('Research Papers Error:', error);
-            return [];
-        }
+        } catch (error) { return []; }
     }
 
     async runProfessionalAnalysis(title, repos) {
         try {
             const response = await fetch(`${this.baseURL}/professional-analysis`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ title, repos })
             });
             const data = await response.json();
             return data.analysis;
-        } catch (error) {
-            console.error('Professional Analysis Error:', error);
-            return "Analysis unavailable.";
-        }
+        } catch (error) { return "Analysis unavailable."; }
     }
 
     async generateSynopsis(sessionId, idea, researchData) {
         try {
             const response = await fetch(`${this.baseURL}/generate-synopsis`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ session_id: sessionId, idea, research_data: researchData })
             });
             return await response.json();
-        } catch (error) {
-            console.error('Synopsis Generation Error:', error);
-            return null;
-        }
+        } catch (error) { return null; }
     }
 
     async getAISuggestions(memory) {
         try {
             const response = await fetch(`${this.baseURL}/ai-suggestions`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ memory })
             });
             const data = await response.json();
             return data.suggestions;
-        } catch (error) {
-            console.error('AI Suggestions Error:', error);
-            return "Suggestions unavailable.";
-        }
+        } catch (error) { return "Suggestions unavailable."; }
     }
 }
 
-// UI Manager class
+// ==========================================
+// 3. UI MANAGER (With Dynamic Sidebar)
+// ==========================================
 class UIManager {
     constructor(appState, apiService) {
         this.appState = appState;
@@ -185,12 +148,10 @@ class UIManager {
     init() {
         this.setupEventListeners();
         this.renderInitialState();
-        this.updateProgress();
-        this.updateStageIndicator();
+        this.updateProgress(); // Initial sidebar render
     }
 
     setupEventListeners() {
-        // Chat input
         const chatInput = document.getElementById('chat-input');
         const sendButton = document.getElementById('send-button');
 
@@ -202,27 +163,28 @@ class UIManager {
             }
         };
 
-        sendButton.addEventListener('click', sendMessage);
-        chatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                sendMessage();
-            }
+        if(sendButton) sendButton.addEventListener('click', sendMessage);
+        if(chatInput) chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
         });
 
-        // Quick actions
-        document.getElementById('find-projects').addEventListener('click', () => this.handleFindProjects());
-        document.getElementById('research-papers').addEventListener('click', () => this.handleResearchPapers());
-        document.getElementById('professional-analysis').addEventListener('click', () => this.handleProfessionalAnalysis());
-        document.getElementById('ai-suggestions').addEventListener('click', () => this.handleAISuggestions());
+        // Quick Actions
+        const btnFind = document.getElementById('find-projects');
+        if(btnFind) btnFind.addEventListener('click', () => this.handleFindProjects());
+        
+        const btnPapers = document.getElementById('research-papers');
+        if(btnPapers) btnPapers.addEventListener('click', () => this.handleResearchPapers());
+        
+        const btnAnalysis = document.getElementById('professional-analysis');
+        if(btnAnalysis) btnAnalysis.addEventListener('click', () => this.handleProfessionalAnalysis());
+        
+        const btnAI = document.getElementById('ai-suggestions');
+        if(btnAI) btnAI.addEventListener('click', () => this.handleAISuggestions());
 
-        // Synopsis generation
+        // Global clicks
         document.addEventListener('click', (e) => {
-            if (e.target.id === 'generate-synopsis') {
-                this.handleGenerateSynopsis();
-            }
-            if (e.target.id === 'logout-btn') {
-                this.appState.logout();
-            }
+            if (e.target.id === 'generate-synopsis') this.handleGenerateSynopsis();
+            if (e.target.id === 'logout-btn') this.appState.logout();
         });
     }
 
@@ -235,12 +197,12 @@ class UIManager {
             this.appState.messages.push(greeting);
             this.appState.saveMessages();
         }
-
         this.renderMessages();
     }
 
     renderMessages() {
         const chatMessages = document.getElementById('chat-messages');
+        if(!chatMessages) return;
         chatMessages.innerHTML = '';
 
         this.appState.messages.forEach(message => {
@@ -259,13 +221,10 @@ class UIManager {
             messageDiv.appendChild(content);
             chatMessages.appendChild(messageDiv);
         });
-
-        // Scroll to bottom
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
     formatMessage(content) {
-        // Convert markdown-like syntax to HTML
         return content
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*(.*?)\*/g, '<em>$1</em>')
@@ -273,19 +232,14 @@ class UIManager {
     }
 
     async handleUserMessage(message) {
-        // Add user message
         const userMessage = { role: "user", content: message };
         this.appState.messages.push(userMessage);
         this.appState.conversationHistory.push(userMessage);
         this.appState.saveMessages();
-        this.appState.saveConversationHistory();
         this.renderMessages();
-
-        // Show thinking indicator
         this.showThinkingIndicator();
 
         try {
-            // Call API
             const result = await this.apiService.handleNaturalConversation(
                 message,
                 this.appState.conversationHistory,
@@ -293,11 +247,9 @@ class UIManager {
                 this.appState.synopsisMemory
             );
 
-            // Update state
             this.appState.synopsisMemory = result.updated_memory;
             this.appState.saveSynopsisMemory();
 
-            // Build response
             let responseContent = result.response;
 
             if (result.auto_research_triggered) {
@@ -309,7 +261,6 @@ class UIManager {
                 responseContent += `\n\n*📝 Updated: ${result.updated_fields.join(', ')}*`;
             }
 
-            // Check if ready for synopsis
             const filledFields = Object.values(result.updated_memory).filter(v => v && String(v).trim().length > 10).length;
             if (filledFields >= 4 && !result.updated_memory.synopsis_offer_shown) {
                 responseContent += '\n\n<div class="synopsis-ready"><h4>🎉 Ready for Synopsis Generation!</h4><p>Click "Generate Synopsis" in the sidebar!</p></div>';
@@ -317,7 +268,6 @@ class UIManager {
                 this.appState.saveSynopsisMemory();
             }
 
-            // Add assistant response
             const assistantMessage = { role: "assistant", content: responseContent };
             this.appState.messages.push(assistantMessage);
             this.appState.conversationHistory.push(assistantMessage);
@@ -325,17 +275,13 @@ class UIManager {
             this.appState.saveConversationHistory();
 
             this.renderMessages();
-            this.updateProgress();
-            this.updateStageIndicator();
+            this.updateProgress(); // Update sidebar dynamically
 
         } catch (error) {
-            console.error('Error handling message:', error);
             const errorMessage = { role: "assistant", content: "❌ An error occurred. Please try again." };
             this.appState.messages.push(errorMessage);
-            this.appState.saveMessages();
             this.renderMessages();
         }
-
         this.hideThinkingIndicator();
     }
 
@@ -344,146 +290,125 @@ class UIManager {
         const thinkingDiv = document.createElement('div');
         thinkingDiv.id = 'thinking-indicator';
         thinkingDiv.className = 'chat-message assistant';
-        thinkingDiv.innerHTML = `
-            <div class="chat-avatar">🤖</div>
-            <div class="chat-content">🤔 AURA is thinking...</div>
-        `;
+        thinkingDiv.innerHTML = `<div class="chat-avatar">🤖</div><div class="chat-content">🤔 AURA is thinking...</div>`;
         chatMessages.appendChild(thinkingDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
     hideThinkingIndicator() {
         const thinkingIndicator = document.getElementById('thinking-indicator');
-        if (thinkingIndicator) {
-            thinkingIndicator.remove();
-        }
+        if (thinkingIndicator) thinkingIndicator.remove();
     }
 
+    // ✅ DYNAMIC SIDEBAR UPDATE FUNCTION
     updateProgress() {
         const memory = this.appState.synopsisMemory;
         const progressItems = {
-            "title": "📝 Project Title",
-            "group_details": "👥 Team Details",
-            "objective_scope": "🎯 Objectives & Scope",
-            "process_description": "⚙️ Methodology",
-            "resources_limitations": "📋 Resources",
-            "conclusion": "🎉 Expected Outcomes",
-            "references": "📚 References"
+            "title": "Project Title",
+            "group_details": "Team Details",
+            "objective_scope": "Objectives & Scope",
+            "process_description": "Methodology",
+            "resources_limitations": "Resources",
+            "conclusion": "Expected Outcomes",
+            "references": "References"
         };
 
         const completed = Object.keys(progressItems).filter(key => memory[key]).length;
         const total = Object.keys(progressItems).length;
         const progress = completed / total;
 
-        // Update progress bar
+        // 1. Update Progress Bar
         const progressBar = document.getElementById('progress-bar');
         if (progressBar) {
-            progressBar.innerHTML = `<div style="width: ${progress * 100}%"></div>`;
+            const percent = Math.round(progress * 100);
+            progressBar.innerHTML = `
+                <div class="progress-header">
+                    <span>${completed}/${total} sections (${percent}%)</span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-fill" style="width: ${percent}%"></div>
+                </div>
+            `;
         }
 
-        // Update progress details
+        // 2. Update List with Expandable Cards
         const progressDetails = document.getElementById('progress-details');
         if (progressDetails) {
             progressDetails.innerHTML = Object.entries(progressItems).map(([key, label]) => {
                 const value = memory[key];
-                if (value) {
-                    return `<div class="progress-item progress-complete">✅ ${label}</div>`;
+                
+                if (value && String(value).trim().length > 0) {
+                    const previewText = String(value).replace(/<[^>]*>?/gm, ''); 
+                    return `
+                    <details class="sidebar-card completed">
+                        <summary>
+                            <span class="icon">✅</span>
+                            <strong>${label}</strong>
+                            <span class="expand-hint">▼</span>
+                        </summary>
+                        <div class="card-content">
+                            <div class="content-text">${previewText}</div>
+                        </div>
+                    </details>`;
                 } else {
-                    return `<div class="progress-item">⏳ ${label}</div>`;
+                    return `
+                    <div class="sidebar-card pending">
+                        <span class="icon">⏳</span>
+                        <span>${label}</span>
+                    </div>`;
                 }
             }).join('');
         }
 
-        // Update research status
+        // 3. Update Research Status
         const researchStatus = document.getElementById('research-status');
         if (researchStatus) {
             if (this.appState.autoResearchDone) {
                 researchStatus.innerHTML = `
-                    <div style="color: green;">✅ Auto-research completed!</div>
-                    <ul>
-                        <li>📄 Introduction generated</li>
-                        <li>📚 Literature review completed</li>
-                        <li>⚙️ Methodology analyzed</li>
-                        <li>💻 Requirements specified</li>
-                        <li>📊 Feasibility assessed</li>
-                    </ul>
-                `;
+                    <div class="sidebar-card research-done">
+                        <div>✅ <strong>Auto-Research Complete!</strong></div>
+                        <div style="font-size: 0.8em; opacity: 0.8; margin-top: 5px;">
+                            Research integrated.
+                        </div>
+                    </div>`;
             } else {
-                researchStatus.innerHTML = '<div style="color: orange;">⏳ Auto-research pending...</div>';
+                researchStatus.innerHTML = `
+                    <div class="sidebar-card research-pending">
+                        ⏳ Auto-research pending...
+                    </div>`;
             }
         }
 
-        // Update synopsis section
+        // 4. Update Synopsis Section
         const synopsisSection = document.getElementById('synopsis-section');
         if (synopsisSection) {
             if (completed >= 3) {
-                synopsisSection.innerHTML = `
-                    <button id="generate-synopsis">🚀 Generate Synopsis</button>
-                    <div id="synopsis-download" style="display: none;">
-                        <a id="download-link" href="#" download>📥 Download PDF</a>
-                    </div>
-                `;
+                 if (!synopsisSection.innerHTML.includes('Generate Synopsis')) {
+                     synopsisSection.innerHTML = `<button id="generate-synopsis" class="sidebar-btn">🚀 Generate Synopsis</button>`;
+                }
             } else {
-                synopsisSection.innerHTML = `<p>Need ${3 - completed} more sections</p>`;
+                synopsisSection.innerHTML = `<div class="sidebar-note">Need ${3 - completed} more sections</div>`;
             }
-        }
-
-        // Update session info
-        const sessionInfo = document.getElementById('session-info');
-        if (sessionInfo) {
-            sessionInfo.innerHTML = `
-                <p><strong>Session ID:</strong> ${this.appState.sessionId.slice(-8)}...</p>
-                <p><strong>Messages:</strong> ${this.appState.messages.length}</p>
-                <p><strong>Created:</strong> ${new Date().toLocaleString()}</p>
-            `;
-        }
-    }
-
-    updateStageIndicator() {
-        const memory = this.appState.synopsisMemory;
-        const filledCount = Object.values(memory).filter(v => v && String(v).trim().length > 10).length;
-
-        let stage;
-        if (filledCount === 0) stage = "🌱 Getting Started";
-        else if (filledCount < 3) stage = "📝 Gathering Information";
-        else if (filledCount < 5) stage = "🔬 Research Phase";
-        else stage = "📄 Ready for Synopsis";
-
-        const stageIndicator = document.getElementById('stage-indicator');
-        if (stageIndicator) {
-            stageIndicator.textContent = stage;
         }
     }
 
     async handleFindProjects() {
         const title = this.appState.synopsisMemory.title;
-        if (!title) {
-            alert("Please share your project idea first!");
-            return;
-        }
-
+        if (!title) { alert("Please share your project idea first!"); return; }
         const repos = await this.apiService.searchGitHubRepos(title, 5);
         this.showResults("📦 Similar Projects Found", repos.map(repo => `<div>${repo}</div>`).join(''));
     }
 
     async handleResearchPapers() {
         const title = this.appState.synopsisMemory.title;
-        if (!title) {
-            alert("Please share your project idea first!");
-            return;
-        }
-
+        if (!title) { alert("Please share your project idea first!"); return; }
         const papers = await this.apiService.searchResearchPapers(title, 5);
         this.showResults("📄 Relevant Papers", papers.map(paper => `<div>${paper}</div>`).join(''));
     }
 
     async handleProfessionalAnalysis() {
         const title = this.appState.synopsisMemory.title;
-        if (!title) {
-            alert("Please share your project idea first!");
-            return;
-        }
-
+        if (!title) { alert("Please share your project idea first!"); return; }
         const repos = await this.apiService.searchGitHubRepos(title, 3);
         const analysis = await this.apiService.runProfessionalAnalysis(title, repos);
         this.showResults("🎯 Professional Analysis", `<div>${analysis}</div>`);
@@ -491,11 +416,7 @@ class UIManager {
 
     async handleAISuggestions() {
         const title = this.appState.synopsisMemory.title;
-        if (!title) {
-            alert("Please share your project idea first!");
-            return;
-        }
-
+        if (!title) { alert("Please share your project idea first!"); return; }
         const suggestions = await this.apiService.getAISuggestions(this.appState.synopsisMemory);
         this.showResults("💡 AI Suggestions", `<div>${suggestions}</div>`);
     }
@@ -513,11 +434,12 @@ class UIManager {
             );
 
             if (result && result.filename) {
-                // Create download link
                 const downloadLink = document.createElement('a');
+                // ✅ Fix: Use dynamic Base URL for download
                 downloadLink.href = `${this.apiService.baseURL}/download/${result.filename}`;
                 downloadLink.download = result.filename;
                 downloadLink.textContent = '📥 Download PDF';
+                downloadLink.className = 'download-btn'; // Use CSS class instead of inline styles
                 downloadLink.style.cssText = `
                     display: inline-block;
                     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -529,12 +451,9 @@ class UIManager {
                     margin-top: 1rem;
                     transition: all 0.3s ease;
                 `;
-                downloadLink.onmouseover = () => downloadLink.style.transform = 'translateY(-2px)';
-                downloadLink.onmouseout = () => downloadLink.style.transform = 'translateY(0)';
 
                 const synopsisSection = document.getElementById('synopsis-section');
                 synopsisSection.appendChild(downloadLink);
-
                 button.textContent = '✅ Generated!';
                 button.style.background = '#4caf50';
             } else {
@@ -542,189 +461,80 @@ class UIManager {
                 button.style.background = '#f44336';
             }
         } catch (error) {
-            console.error('Synopsis generation error:', error);
+            console.error('Synopsis error:', error);
             button.textContent = '❌ Error';
-            button.style.background = '#f44336';
         } finally {
             button.disabled = false;
         }
     }
 
     showResults(title, content) {
-    const quickActions = document.getElementById('quick-actions');
-    if (!quickActions) return;
+        const quickActions = document.getElementById('quick-actions');
+        if (!quickActions) return;
+        
+        const existingCards = quickActions.querySelectorAll('.info-card h4');
+        existingCards.forEach(h4 => {
+            if (h4.textContent.trim() === title.trim()) h4.parentElement.remove();
+        });
 
-    // 🔁 Remove any existing card with the same title
-    const existingCards = quickActions.querySelectorAll('.info-card h4');
-    existingCards.forEach(h4 => {
-        if (h4.textContent.trim() === title.trim()) {
-            h4.parentElement.remove();
-        }
-    });
-
-    // ➕ Add fresh card
-    const resultsDiv = document.createElement('div');
-    resultsDiv.className = 'info-card';
-    resultsDiv.innerHTML = `<h4>${title}</h4>${content}`;
-
-    quickActions.appendChild(resultsDiv);
-    resultsDiv.scrollIntoView({ behavior: 'smooth' });
-   }
-
+        const resultsDiv = document.createElement('div');
+        resultsDiv.className = 'info-card';
+        resultsDiv.innerHTML = `<h4>${title}</h4>${content}`;
+        quickActions.appendChild(resultsDiv);
+        resultsDiv.scrollIntoView({ behavior: 'smooth' });
+    }
 }
 
-// Initialize the app
+// ==========================================
+// 4. INITIALIZATION
+// ==========================================
 document.addEventListener('DOMContentLoaded', () => {
     const appState = new AppState();
     const apiService = new APIService();
     const uiManager = new UIManager(appState, apiService);
 
-    // Header functionality
+    // UI Toggles
     const sidebarToggle = document.getElementById('sidebar-toggle');
     const sidebar = document.getElementById('sidebar');
     const newChatBtn = document.getElementById('new-chat-btn');
     const logoutBtn = document.getElementById('logout-btn');
     const userDisplay = document.getElementById('user-display');
-    const headerSearch = document.getElementById('header-search');
-
-    // Update user display
-    const username = localStorage.getItem('aura_username') || 'Guest';
+    
     if (userDisplay) {
+        const username = localStorage.getItem('aura_username') || 'Guest';
         userDisplay.textContent = username.charAt(0).toUpperCase();
-        userDisplay.setAttribute('data-fullname', username);
     }
 
-    // Navigation functionality
-    const navLinks = document.querySelectorAll('.nav-link');
-    navLinks.forEach(link => {
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-            const targetId = link.getAttribute('href').substring(1);
-            const targetSection = document.getElementById(targetId);
-            if (targetSection) {
-                targetSection.scrollIntoView({ behavior: 'smooth' });
-            }
-        });
-    });
-
-    // Search functionality
-    if (headerSearch) {
-        headerSearch.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                const query = headerSearch.value.trim();
-                if (query) {
-                    // Send search query to chat
-                    const chatInput = document.getElementById('chat-input');
-                    if (chatInput) {
-                        chatInput.value = `Search for: ${query}`;
-                        chatInput.focus();
-                        // Trigger send if possible
-                        const sendButton = document.getElementById('send-button');
-                        if (sendButton) {
-                            sendButton.click();
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    // Sidebar toggle
     if (sidebarToggle && sidebar) {
         sidebarToggle.addEventListener('click', () => {
             sidebar.classList.toggle('sidebar-hidden');
             const main = document.querySelector('main');
-            if (main) {
-                main.classList.toggle('sidebar-hidden');
-            }
+            if (main) main.classList.toggle('sidebar-hidden');
         });
     }
 
-    // New chat functionality
     if (newChatBtn) {
         newChatBtn.addEventListener('click', () => {
-            if (confirm('Start a new chat? This will clear the current conversation.')) {
-                // Clear messages and reset state
+            if (confirm('Start a new chat?')) {
                 appState.messages = [];
-                appState.saveMessages();
                 appState.conversationHistory = [];
-                appState.saveConversationHistory();
                 appState.synopsisMemory = {};
-                appState.saveSynopsisMemory();
                 appState.autoResearchDone = false;
-
-                // Clear UI
+                appState.saveMessages();
+                appState.saveConversationHistory();
+                appState.saveSynopsisMemory();
+                
                 const chatMessages = document.getElementById('chat-messages');
-                if (chatMessages) {
-                    chatMessages.innerHTML = '';
-                }
-
-                // Reset progress
+                if (chatMessages) chatMessages.innerHTML = '';
                 uiManager.updateProgress();
-
-                // Show welcome message
-                uiManager.addMessage('assistant', 'Hello! I\'m AURA, your AI research assistant. Tell me about your project idea and I\'ll help you create a comprehensive synopsis.');
+                uiManager.renderInitialState();
             }
         });
     }
 
-    // Logout functionality
     if (logoutBtn) {
         logoutBtn.addEventListener('click', () => {
-            if (confirm('Are you sure you want to logout?')) {
-                // Clear all session data
-                localStorage.removeItem('aura_is_logged_in');
-                localStorage.removeItem('aura_username');
-                localStorage.removeItem('aura_login_time');
-                localStorage.removeItem('aura_session_id');
-                localStorage.removeItem('aura_messages');
-                localStorage.removeItem('aura_conversation_history');
-                localStorage.removeItem('aura_synopsis_memory');
-
-                // Redirect to login
-                window.location.href = 'login.html';
-            }
+            if (confirm('Logout?')) appState.logout();
         });
     }
 });
-function updateSidebarProgress(memory = {}) {
-  const sections = [
-    { key: "title", label: "📘 Project Title" },
-    { key: "group_details", label: "👥 Team Details" },
-    { key: "objective_scope", label: "🎯 Objectives & Scope" },
-    { key: "process_description", label: "⚙️ Methodology" },
-    { key: "resources_limitations", label: "🧩 Resources" },
-    { key: "conclusion", label: "🎓 Expected Outcomes" },
-    { key: "references", label: "📚 References" }
-  ];
-
-  const list = document.getElementById('progress-list');
-  const bar = document.getElementById('progress-fill');
-  if (!list || !bar) return;
-
-  let filled = 0;
-  list.innerHTML = '';
-
-  sections.forEach(sec => {
-    const complete = memory[sec.key] && memory[sec.key].trim().length > 0;
-    if (complete) filled++;
-    const status = complete ? "✅" : "⏳";
-    const li = document.createElement('li');
-    li.innerHTML = `<span>${sec.label}</span><span class="status">${status}</span>`;
-    list.appendChild(li);
-  });
-
-  const percent = Math.round((filled / sections.length) * 100);
-  bar.style.width = `${percent}%`;
-}
-updateSidebarProgress();
-function updateStageIndicator(filledCount = 0) {
-    const stageIndicator = document.getElementById('stage-indicator');
-    if (!stageIndicator) return;
-    let stage;
-    if (filledCount === 0) stage = "🌱 Getting Started";
-    else if (filledCount < 3) stage = "📝 Gathering Information";
-    else if (filledCount < 5) stage = "🔬 Research Phase";
-    else stage = "📄 Ready for Synopsis"
-    stageIndicator.textContent = stage
-    };
