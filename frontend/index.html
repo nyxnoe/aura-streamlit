@@ -5,14 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AURA - Intelligent Research Assistant</title>
     <link rel="stylesheet" href="style.css">
-    <script>
-        // Check if user is logged in before showing the main interface
-        if (localStorage.getItem('aura_is_logged_in') !== 'true') {
-            window.location.href = 'login.html';
-        }
-    </script>
 </head>
 <body>
+    <!-- ✅ FIXED: Login check runs BEFORE any content displays -->
+    <script>
+        (function() {
+            const isLoggedIn = localStorage.getItem('aura_is_logged_in');
+            if (isLoggedIn !== 'true') {
+                // Use replace() instead of href to prevent back button issues
+                window.location.replace('login.html');
+            }
+        })();
+    </script>
+
     <!-- Header Section -->
     <header>
         <div class="header-content">
@@ -24,7 +29,8 @@
                 <input type="text" class="header-search" id="header-search" placeholder="🔍 Search projects, papers, or ask questions..." />
             </div>
             <div class="header-right">
-                <span id="user-display" class="user-display" data-fullname="John Doe">J</span>
+                <!-- ✅ FIXED: Removed hard-coded "John Doe", JS will populate this -->
+                <span id="user-display" class="user-display">?</span>
                 <button id="new-chat-btn" class="new-chat-btn">🆕 New Chat</button>
                 <button id="logout-btn" class="logout-btn">🚪 Logout</button>
             </div>
@@ -39,28 +45,34 @@
 
     <!-- Sidebar -->
     <aside id="sidebar" class="sidebar-hidden">
-    <h2>📊 Project Progress</h2>
+        <h2>📊 Project Progress</h2>
 
-    <!-- Progress Bar -->
-    <div class="progress-bar">
-        <div id="progress-fill" class="progress-fill"></div>
-    </div>
+        <!-- Progress Bar -->
+        <div id="progress-bar" class="progress-section">
+            <!-- Dynamically filled by JS -->
+        </div>
 
-    <!-- Progress List -->
-    <ul id="progress-list" class="progress-list">
-        <!-- Dynamically filled by JS -->
-    </ul>
+        <!-- Progress Details -->
+        <div id="progress-details">
+            <!-- Dynamically filled by JS -->
+        </div>
 
-    <h3>🔬 Research Status</h3>
-    <div id="research-status"></div>
+        <h3>🔬 Research Status</h3>
+        <div id="research-status">
+            <!-- Dynamically filled by JS -->
+        </div>
 
-    <h3>📄 Synopsis Generation</h3>
-    <div id="synopsis-section"></div>
+        <h3>📄 Synopsis Generation</h3>
+        <div id="synopsis-section">
+            <!-- Dynamically filled by JS -->
+        </div>
 
-    <details>
-        <summary>🔧 Session Info</summary>
-        <div id="session-info"></div>
-    </details>
+        <details>
+            <summary>🔧 Session Info</summary>
+            <div id="session-info">
+                <!-- Dynamically filled by JS -->
+            </div>
+        </details>
     </aside>
 
     <!-- Main Content -->
@@ -209,7 +221,7 @@
                     </div>
                     <div class="contact-card">
                         <h3>📞 Support</h3>
-                        <hlink>Phone: <hlink>+918250346972</hlink>
+                        <p>Phone: +918250346972</p>
                         <p>Email us at nihalgood1234@gmail.com for immediate assistance.</p>
                         <p>Our dedicated support team is here to assist you.</p>
                     </div>
@@ -218,6 +230,7 @@
                         <p>Nihal Prasad</p>
                         <p>Nitin Kumar Das</p>
                         <p>Shiva Saini</p>
+                        <p>Tammana</p>
                         <p>For technical support or feedback, please reach out to our development team.</p>
                     </div>
                 </div>

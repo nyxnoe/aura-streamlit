@@ -5,6 +5,14 @@ Searches multiple locations for .env files and loads them
 import os
 from pathlib import Path
 
+# Global variables to store API keys
+OPENROUTER_API_KEY = None
+SUPABASE_URL = None
+SUPABASE_KEY = None
+GITHUB_TOKEN = None
+AI_MODEL_PRIMARY = None
+AI_MODEL_FALLBACK = None
+
 def load_environment():
     """
     Load environment variables from multiple possible locations.
@@ -71,6 +79,18 @@ def load_environment():
     
     if not missing_required:
         print("✅ All required environment variables loaded")
+    
+    # Debug: Print API keys (first 10 chars)
+    global OPENROUTER_API_KEY, SUPABASE_URL, SUPABASE_KEY, GITHUB_TOKEN, AI_MODEL_PRIMARY, AI_MODEL_FALLBACK
+    OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
+    SUPABASE_URL = os.getenv('SUPABASE_URL')
+    SUPABASE_KEY = os.getenv('SUPABASE_KEY')
+    GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
+    AI_MODEL_PRIMARY = os.getenv('AI_MODEL_PRIMARY', 'google/gemini-2.0-flash-exp:free')
+    AI_MODEL_FALLBACK = os.getenv('AI_MODEL_FALLBACK', 'tngtech/deepseek-r1t2-chimera:free')
+    print(f"DEBUG: OPENROUTER_API_KEY loaded: {repr(OPENROUTER_API_KEY[:10] if OPENROUTER_API_KEY else None)}...")
+    print(f"DEBUG: AI_MODEL_PRIMARY: {AI_MODEL_PRIMARY}")
+    print(f"DEBUG: AI_MODEL_FALLBACK: {AI_MODEL_FALLBACK}")
     
     return env_loaded
 

@@ -46,8 +46,11 @@ if not exist "C:\Users\nihal\OneDrive\Desktop\aura-streamlit\config\.env" (
     echo OPENROUTER_API_KEY=your_openrouter_api_key_here > config\.env
     echo SUPABASE_URL=your_supabase_url_here >> config\.env
     echo SUPABASE_KEY=your_supabase_key_here >> config\.env
+    echo AI_MODEL_PRIMARY=google/gemini-2.0-flash-exp:free >> config\.env
+    echo AI_MODEL_FALLBACK=tngtech/deepseek-r1t2-chimera:free >> config\.env
     echo.
     echo IMPORTANT: Please edit the config\.env file with your actual API keys!
+    echo For OpenAI, get a free API key at https://platform.openai.com/api-keys (includes $5 free credit)
     echo The application will still work but AI features will be limited.
     echo.
     timeout /t 5 >nul
@@ -55,6 +58,7 @@ if not exist "C:\Users\nihal\OneDrive\Desktop\aura-streamlit\config\.env" (
 
 echo Starting AURA Backend Server...
 echo.
+
 echo Server will be available at: http://localhost:5000
 echo.
 echo Opening AURA Frontend in your browser...
@@ -72,12 +76,12 @@ echo.
 
 REM Start the server in background and open frontend
 start /B python backend\api_server.py
-timeout /t 3 >nul
-start frontend\index.html
+timeout /t 5 >nul
+start http://localhost:5000
 
 echo AURA is now running!
 echo.
 echo If the browser doesn't open automatically:
-echo - Open frontend\index.html manually in your browser
+echo - Open http://localhost:5000 in your browser
 echo.
 pause

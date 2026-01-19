@@ -118,16 +118,34 @@ def get_ai_response(messages: list, model: str = "nvidia/nemotron-nano-12b-v2-vl
     """Generic function to get AI response from OpenRouter (safe, non-raising)."""
     client = get_openrouter_client()
     if client is None:
-        # Fallback: return a simple deterministic response instead of crashing
         print("OpenRouter client not available — returning fallback response.")
         return "AI service not configured. Please set OPENROUTER_API_KEY to enable AI features."
+
     try:
         response = client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=temperature
         )
-        return response.choices[0].message.content
+
+        # ✅ SAFETY CHECKS
+        if response is None:
+            return "AI returned no response (response=None)."
+
+        choices = getattr(response, "choices", None)
+        if not choices or len(choices) == 0:
+            return "AI returned no choices in response."
+
+        msg = getattr(choices[0], "message", None)
+        if msg is None:
+            return "AI returned empty message object."
+
+        content = getattr(msg, "content", None)
+        if not content:
+            return "AI returned empty content."
+
+        return content
+
     except Exception as e:
         print(f"Error getting AI response: {e}")
         return f"I encountered an error while calling AI: {e}"
@@ -342,7 +360,7 @@ def run_professional_analysis(idea: str, repos: list) -> str:
     
     return get_ai_response(
         [{"role": "user", "content": analysis_prompt}],
-        model="nvidia/nemotron-nano-12b-v2-vl:free"
+        model="xiaomi/mimo-v2-flash:free"
     )
 
 # ---------------------------------

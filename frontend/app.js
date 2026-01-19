@@ -390,6 +390,16 @@ class UIManager {
                 synopsisSection.innerHTML = `<div class="sidebar-note">Need ${3 - completed} more sections</div>`;
             }
         }
+
+        // ✅ 5. Update Session Info (NEW)
+        const sessionInfo = document.getElementById('session-info');
+        if (sessionInfo) {
+            sessionInfo.innerHTML = `
+                <p><strong>Session ID:</strong> ${this.appState.sessionId.slice(-12)}...</p>
+                <p><strong>Messages:</strong> ${this.appState.messages.length}</p>
+                <p><strong>Username:</strong> ${localStorage.getItem('aura_username') || 'Guest'}</p>
+            `;
+        }
     }
 
     async handleFindProjects() {
@@ -439,7 +449,7 @@ class UIManager {
                 downloadLink.href = `${this.apiService.baseURL}/download/${result.filename}`;
                 downloadLink.download = result.filename;
                 downloadLink.textContent = '📥 Download PDF';
-                downloadLink.className = 'download-btn'; // Use CSS class instead of inline styles
+                downloadLink.className = 'download-btn';
                 downloadLink.style.cssText = `
                     display: inline-block;
                     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -493,18 +503,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const apiService = new APIService();
     const uiManager = new UIManager(appState, apiService);
 
+    // ✅ FIXED: Set user display with actual username and data attribute
+    const userDisplay = document.getElementById('user-display');
+    if (userDisplay) {
+        const username = localStorage.getItem('aura_username') || 'Guest';
+        userDisplay.textContent = username.charAt(0).toUpperCase();
+        userDisplay.setAttribute('data-fullname', username); // Added for tooltip
+    }
+
     // UI Toggles
     const sidebarToggle = document.getElementById('sidebar-toggle');
     const sidebar = document.getElementById('sidebar');
     const newChatBtn = document.getElementById('new-chat-btn');
     const logoutBtn = document.getElementById('logout-btn');
-    const userDisplay = document.getElementById('user-display');
     
-    if (userDisplay) {
-        const username = localStorage.getItem('aura_username') || 'Guest';
-        userDisplay.textContent = username.charAt(0).toUpperCase();
-    }
-
     if (sidebarToggle && sidebar) {
         sidebarToggle.addEventListener('click', () => {
             sidebar.classList.toggle('sidebar-hidden');
@@ -515,7 +527,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (newChatBtn) {
         newChatBtn.addEventListener('click', () => {
-            if (confirm('Start a new chat?')) {
+            // ✅ IMPROVED: Better confirmation message
+            if (confirm('Start a new chat? This will clear your current conversation.')) {
                 appState.messages = [];
                 appState.conversationHistory = [];
                 appState.synopsisMemory = {};
@@ -534,7 +547,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (logoutBtn) {
         logoutBtn.addEventListener('click', () => {
-            if (confirm('Logout?')) appState.logout();
+            // ✅ IMPROVED: Better confirmation message
+            if (confirm('Are you sure you want to logout?')) appState.logout();
         });
     }
 });

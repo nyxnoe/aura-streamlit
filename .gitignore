@@ -1,0 +1,14 @@
+# env files (secrets)
+.env
+**/.env
+
+# python cache
+__pycache__/
+**/__pycache__/
+*.pyc
+
+# outputs
+backend/outputs/
+
+# misc
+.zencoder/

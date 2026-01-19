@@ -398,6 +398,40 @@ if prompt := st.chat_input("💬 Tell me about your project idea or ask any ques
     # Process with AURA
     with st.chat_message("assistant", avatar="🤖"):
         message_placeholder = st.empty()
+        with st.spinner("AURA is thinking..."):
+            try:
+                result = handle_natural_conversation(
+                    prompt, 
+                    st.session_state.conversation_history,
+                    st.session_state.session_id,
+                    st.session_state.synopsis_memory
+                )
+                
+                # Update memory
+                st.session_state.synopsis_memory = result.get("updated_memory", st.session_state.synopsis_memory)
+                save_memory(st.session_state.session_id, st.session_state.synopsis_memory)
+                
+                full_response = result.get("response", "I'm sorry, I couldn't process that.")
+                
+                # Check for research trigger
+                if result.get("auto_research_triggered"):
+                    st.session_state.auto_research_done = True
+                    full_response += "\n\n🔬 **Auto-research triggered!** I've found some relevant information for your project."
+                
+                # Display response with a small delay for natural feel
+                message_placeholder.markdown(full_response)
+                
+                # Add assistant message to history
+                st.session_state.messages.append({"role": "assistant", "content": full_response})
+                st.session_state.conversation_history.append({"role": "assistant", "content": full_response})
+                
+                # Rerun to update sidebar
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"Error: {e}")
+                st.session_state.messages.append({"role": "assistant", "content": "I encountered an error. Please try again."})
+
         
         # --- OPTIMIZATION ---
         # Removed the fake time.sleep() loop.

@@ -1,3 +1,6 @@
+print("DEBUG: services_v2.py loaded")
+import sys
+print("sys.path:", sys.path)
 import os
 import json
 from datetime import datetime
@@ -35,6 +38,7 @@ from github_services_v2 import search_github_repos as search_github_repos_cached
 # Global clients
 _supabase_client = None
 _openrouter_client = None
+_ai_provider = None  # "openai" or "openrouter"
 _local_memory_cache = {}
 
 # ---------------------------------
@@ -66,95 +70,104 @@ def get_supabase_client():
 
 
 # ---------------------------------
-# OpenRouter Client (using OpenAI SDK)
+# AI Client Setup (OpenAI or OpenRouter)
 # ---------------------------------
-def get_openrouter_client():
-    """Lazy-create OpenRouter/OpenAI client. Return None if API key missing."""
-    global _openrouter_client
+def get_ai_client():
+    """Create OpenRouter AI client."""
+    global _openrouter_client, _ai_provider
     if _openrouter_client is not None:
         return _openrouter_client
 
-    # 1. CREATE the variable first (This is the fix)
-    openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
-
-    # 2. NOW we can safely check it
-    if not openrouter_api_key:
-        print("❌ OPENROUTER_API_KEY not set. AI features will be unavailable.")
-        _openrouter_client = None
-        return None
-
-    # 3. Debug print (Optional, but helpful)
-    print(f"✅ OpenRouter API Key found (length: {len(openrouter_api_key)})")
-
-    try:
+    if env_loader.OPENROUTER_API_KEY:
+        print(f"✅ Using OpenRouter API Key (length: {len(env_loader.OPENROUTER_API_KEY)})")
         from openai import OpenAI
-        _openrouter_client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=openrouter_api_key)
+        _openrouter_client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=env_loader.OPENROUTER_API_KEY)
+        _ai_provider = "openrouter"
         print("✅ OpenRouter client initialized")
         return _openrouter_client
-    except Exception as e:
-        print(f"❌ Failed to initialize OpenRouter: {e}")
-        _openrouter_client = None
-        return None
+
+    print("❌ OpenRouter API key not available. AI features will be unavailable.")
+    _openrouter_client = None
+    _ai_provider = None
+    return None
 
 # ---------------------------------
 # Enhanced AI Response Function
 # ----------------------------------
-def get_ai_response(messages: list, model: str = "nvidia/nemotron-nano-12b-v2-vl:free", temperature: float = 0.7) -> str:
-    """Generic function to get AI response from OpenRouter (safe, non-raising)."""
-    client = get_openrouter_client()
+def get_ai_response(messages: list, model: str = None, temperature: float = 0.7) -> str:
+    """Get AI response from OpenRouter only. No OpenAI fallback."""
+    if model is None:
+        model = env_loader.AI_MODEL_PRIMARY
+    
+    client = get_ai_client()
     if client is None:
         return "AI service not configured. Please set OPENROUTER_API_KEY environment variable."
+    
+    import time
+    start_time = time.time()
+    print(f"🤖 Calling OpenRouter AI model: {model}...")
+    
     try:
         response = client.chat.completions.create(
             model=model,
             messages=messages,
-            temperature=temperature
+            temperature=temperature,
+            timeout=15
         )
+        
+        duration = time.time() - start_time
+        print(f"⏱️ AI response received in {duration:.2f}s")
+        
+        if not response or not hasattr(response, 'choices') or not response.choices:
+            print(f"⚠️ Empty response from model {model}")
+            return "AI returned an empty response."
+            
         return response.choices[0].message.content
     except Exception as e:
         print(f"❌ Error getting AI response: {e}")
+        print(f"❌ Error type: {type(e)}")
+        # Try fallback model only once
+        if model != env_loader.AI_MODEL_FALLBACK:
+             print("🔄 Trying fallback model...")
+             return get_ai_response(messages, model=env_loader.AI_MODEL_FALLBACK, temperature=temperature)
+        return f"I encountered an error while calling AI: {str(e)}"
         return f"I encountered an error while calling AI: {str(e)}"
 
-def get_structured_ai_response(messages: list, format_instruction: str = "", model: str = "nvidia/nemotron-nano-12b-v2-vl:free") -> dict:
+def get_structured_ai_response(messages: list, format_instruction: str = "", model: str = None) -> dict:
+    if model is None:
+        model = env_loader.AI_MODEL_PRIMARY
+    print(f"DEBUG: get_structured_ai_response using model: {model}")
     """
-    Get AI response and safely parse JSON (even if malformed).
-    Handles missing commas, markdown fences, and bad line breaks gracefully.
+    Get AI response and safely parse JSON.
     """
     if format_instruction:
         messages.append({"role": "system", "content": format_instruction})
 
-    response = get_ai_response(messages, model=model, temperature=0.2)
+    response = get_ai_response(messages, model=model, temperature=0.1)
+    
+    # If the response itself is an error message, don't try to parse it as JSON
+    if response.startswith("I encountered an error") or response.startswith("AI returned"):
+        return {"error": response}
 
-    # --- CLEANUP PHASE ---
     try:
-        # Remove markdown code blocks
-        cleaned = re.sub(r"^```(json)?|```$", "", response.strip(), flags=re.MULTILINE)
-        # Remove comments (// or #)
-        cleaned = re.sub(r"(?m)^\s*(//|#).*$", "", cleaned)
-        # Fix missing commas between keys
-        cleaned = re.sub(r'"}\s*"', '"}, "', cleaned)
-        cleaned = cleaned.replace('}"', '},"')
-        # Add comma between consecutive keys without one
-        cleaned = re.sub(r'"\s*"(?!:)', '", "', cleaned)
-        # Remove markdown bullets/asterisks
-        cleaned = cleaned.replace("*", "").replace("**", "")
-        # Clean blank lines
-        cleaned = re.sub(r'\n\s*\n', '\n', cleaned)
-
-        # Try parsing directly
-        try:
-            return json.loads(cleaned)
-        except Exception:
-            # Fallback: extract inner JSON manually
-            json_match = re.search(r'(\{.*\})', cleaned, re.DOTALL)
-            if json_match:
-                fixed = json_match.group(1)
-                return json.loads(fixed)
-            raise
-
+        # 1. Attempt to find JSON block with regex
+        json_pattern = r'(\{[\s\S]*\})'
+        match = re.search(json_pattern, response)
+        
+        if match:
+            json_str = match.group(1)
+            json_str = re.sub(r'^```(json)?|```$', '', json_str.strip(), flags=re.MULTILINE)
+            
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError:
+                json_str = re.sub(r',\s*\}', '}', json_str)
+                json_str = re.sub(r',\s*\]', ']', json_str)
+                return json.loads(json_str)
+        
+        return json.loads(response.strip())
     except Exception as e:
         print(f"⚠️ [JSON Parse Error] {e}")
-        print("Raw response (truncated):", response[:500])
         return {"error": str(e), "raw_response": response}
 
 # ---------------------------------
@@ -178,32 +191,33 @@ def auto_research_project(project_info: dict) -> dict:
     **Technology Focus:** {project_info.get('process_description', 'Not specified')}
 
     **Task:**
-    Generate the content for the following 5 sections. Be comprehensive,
-    academic, and detailed.
+    Generate comprehensive, detailed, academic-level content for the following 5 sections.
+    Each section should be at least 250-400 words, with specific technical details,
+    references to existing technologies, and thorough analysis.
 
     **Output STRICTLY in valid JSON (no markdown, no comments):**
     {{
-        "introduction": "...",
-        "literature_review": "...",
-        "methodology": "...",
+        "introduction": "Detailed introduction with background, motivation, and significance (250+ words)",
+        "literature_review": "Comprehensive review of existing literature, related work, and gap analysis (300+ words)",
+        "methodology": "Detailed technical methodology, algorithms, tools, and implementation approach (300+ words)",
         "system_requirements": {{
-            "functional": ["..."],
-            "non_functional": ["..."],
-            "hardware": ["..."],
-            "software": ["..."]
+            "functional": ["Detailed list of functional requirements"],
+            "non_functional": ["Detailed list of non-functional requirements"],
+            "hardware": ["Specific hardware requirements with specifications"],
+            "software": ["Specific software stack, libraries, frameworks"]
         }},
         "feasibility_analysis": {{
-            "technical": "...",
-            "economic": "...",
-            "operational": "...",
-            "schedule": "...",
-            "risk": "..."
+            "technical": "Detailed technical feasibility analysis (200+ words)",
+            "economic": "Economic feasibility with cost estimates (200+ words)",
+            "operational": "Operational feasibility analysis (200+ words)",
+            "schedule": "Project timeline and scheduling analysis (200+ words)",
+            "risk": "Risk assessment and mitigation strategies (200+ words)"
         }}
     }}
     """
 
     messages = [{"role": "user", "content": research_prompt}]
-    research_results = get_structured_ai_response(messages, model="nvidia/nemotron-nano-12b-v2-vl:free")
+    research_results = get_structured_ai_response(messages)
 
     if research_results.get("error"):
         print(f"❌ Error in auto-research: {research_results.get('raw_response', '')[:500]}")
@@ -231,47 +245,33 @@ def handle_natural_conversation(user_input: str, conversation_history: list, ses
     """
     
     extraction_and_response_prompt = f"""
-    You are AURA, an intelligent research assistant.
-    Your goal is to talk to a user to help them build an academic project synopsis.
+    You are AURA, a research assistant. Help the user build an academic project synopsis.
     
-    **Current Synopsis Memory:**
-    {json.dumps(current_memory, indent=2)}
-    
-    **Conversation History (last 3 messages):**
-    {json.dumps(conversation_history[-3:], indent=2)}
-    
-    **User's Latest Message:**
-    {user_input}
+    Current Memory: {json.dumps(current_memory)}
+    Last Messages: {json.dumps(conversation_history[-2:])}
+    User: {user_input}
 
-    **Required JSON Output Format (No comments allowed):**
-    ```json
+    Output valid JSON ONLY (no extra text):
     {{
         "updated_memory": {{
-            "title": "Update with new info, or keep old",
-            "group_details": "Update with new info, or keep old",
-            "objective_scope": "Update with new info, or keep old",
-            "process_description": "Update with new info, or keep old",
-            "resources_limitations": "Update with new info, or keep old",
-            "conclusion": "Update with new info, or keep old",
-            "references": "Update with new info, or keep old"
+            "title": "Project title (be specific and academic)",
+            "group_details": "Team member names and roles (e.g., 'John Doe - Team Lead, Jane Smith - Developer')",
+            "objective_scope": "Detailed objectives and scope (at least 150 words, include specific goals, boundaries, and deliverables)",
+            "process_description": "Detailed technical process and methodology (at least 150 words, include technologies, algorithms, workflow)",
+            "resources_limitations": "Resources needed and limitations (at least 100 words, include hardware, software, time, budget constraints)",
+            "conclusion": "Project conclusion and expected outcomes (at least 100 words, include benefits, impact, future work)",
+            "references": "Key references and sources (list 3-5 academic or technical references)"
         }},
-        "updated_fields": ["list", "of", "keys", "you", "updated"],
-        "missing_info": ["list", "of", "key", "info", "still_needed"],
-        "ai_response": "Your natural, conversational response to the user. Acknowledge what they said and ask ONE good follow-up question."
+        "updated_fields": ["key1", "key2"],
+        "missing_info": ["info1", "info2"],
+        "ai_response": "Natural conversational response + ONE follow-up question."
     }}
-    ```
-    
-    **Rules:**
-    -   Fill `updated_memory` by merging new info with the "Current Synopsis Memory".
-    -   `updated_fields` should only list keys you *actually changed* or added.
-    -   `ai_response` must be conversational, not robotic. Do not mention "synopsis".
-    -   **Do not add any comments (like //) inside the JSON response.**
     """
     
     messages = [{"role": "user", "content": extraction_and_response_prompt}]
     
     # Use a fast, small model for chat
-    result = get_structured_ai_response(messages, model="nvidia/nemotron-nano-12b-v2-vl:free")
+    result = get_structured_ai_response(messages)
     
     if result.get("error"):
         return {
@@ -357,7 +357,7 @@ def run_professional_analysis(idea: str, repos: list) -> str:
     
     return get_ai_response(
         [{"role": "user", "content": analysis_prompt}],
-        model="nvidia/nemotron-nano-12b-v2-vl:free"
+        model="tngtech/deepseek-r1t2-chimera:free"
     )
 
 # ---------------------------------
@@ -395,7 +395,20 @@ def save_memory(session_id: str, memory: dict, idea: str = None):
             data_to_save["created_at"] = datetime.now().isoformat()
             client.table("user_sessions").insert(data_to_save).execute()
     except Exception as e:
-        print(f"⚠️ Error saving memory: {e}")
+        print(f"⚠️ Error saving memory: {e}. Retrying...")
+        import time
+        time.sleep(1)  # Wait 1 second
+        try:
+            if existing.data and len(existing.data) > 0:
+                client.table("user_sessions").update(data_to_save).eq("session_id", session_id).execute()
+            else:
+                data_to_save["session_id"] = session_id
+                data_to_save["created_at"] = datetime.now().isoformat()
+                client.table("user_sessions").insert(data_to_save).execute()
+            print("✅ Memory saved on retry")
+        except Exception as e2:
+            print(f"⚠️ Retry failed: {e2}. Saving locally.")
+            _local_memory_cache[session_id] = memory
 
 
 # ---------------------------------
